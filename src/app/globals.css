@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  
+  --color-maroon-50: #faf5f5;
+  --color-maroon-100: #f2e4e4;
+  --color-maroon-200: #e5caca;
+  --color-maroon-300: #d4a8a8;
+  --color-maroon-400: #c07f7f;
+  --color-maroon-500: #b35959;
+  --color-maroon-600: #9e4646;
+  --color-maroon-700: #823a3a;
+  --color-maroon-800: #6b3232;
+  --color-maroon-900: #5a2c2c;
+  --color-maroon-950: #2f1616;
+}
+
+:root {
+  --background: #09090b;
+  --foreground: #fafafa;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
