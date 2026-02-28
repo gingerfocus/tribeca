@@ -39,9 +39,9 @@ ALTER TABLE race_results ENABLE ROW LEVEL SECURITY;
 
 -- Policies for public access
 CREATE POLICY "Allow public read" ON race_results FOR SELECT USING (true);
-CREATE POLICY "Allow public insert" ON race_results FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update" ON race_results FOR UPDATE USING (true);
-CREATE POLICY "Allow public delete" ON race_results FOR DELETE USING (true);
+CREATE POLICY "Deny public insert" ON race_results FOR INSERT WITH CHECK (false);
+CREATE POLICY "Deny public update" ON race_results FOR UPDATE USING (false);
+CREATE POLICY "Deny public delete" ON race_results FOR DELETE USING (false);
 
 -- Insert sample data
 -- Running (times in milliseconds)

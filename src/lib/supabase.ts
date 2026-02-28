@@ -1,20 +1,28 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 type SupabaseInstance = SupabaseClient | null;
 
 function getSupabaseClient(): SupabaseInstance {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    let supabaseUrl;
+    let supabasePublishableKey;
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return null;
-  }
+    if (process.env.NODE_ENV === "development") {
+        supabaseUrl = "http://127.0.0.1:54321";
+        supabasePublishableKey = "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH";
+    } else {
+        supabaseUrl = "https://chkulbjaexjhqzltdfth.supabase.co";
+        supabasePublishableKey = "sb_publishable_0T-zu-ZmhPEeJTESOgZfYA_Ff0AcAr8";
+    }
 
-  try {
-    return createClient(supabaseUrl, supabaseAnonKey);
-  } catch {
-    return null;
-  }
+    if (!supabaseUrl || !supabasePublishableKey) {
+        return null;
+    }
+
+    try {
+        return createClient(supabaseUrl, supabasePublishableKey);
+    } catch {
+        return null;
+    }
 }
 
 export const supabase: SupabaseInstance = getSupabaseClient();
