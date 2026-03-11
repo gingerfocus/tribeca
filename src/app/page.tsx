@@ -1,6 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+    useReactTable,
+    getCoreRowModel,
+    getFilteredRowModel,
+    getSortedRowModel,
+    getPaginationRowModel,
+    flexRender,
+    createColumnHelper,
+    SortingState,
+    ColumnFiltersState,
+} from "@tanstack/react-table";
 import { supabase } from "@/lib/supabase";
 
 interface RaceResult {
@@ -191,30 +202,122 @@ function TimeValue({ ms }: { ms: number | null | undefined }) {
     return <span className="font-mono text-purple-400">{formatTime(ms)}</span>;
 }
 
+const columnHelper = createColumnHelper<RaceResult>();
+
+const columns = [
+    columnHelper.accessor("person_id", {
+        header: "ID",
+        cell: (info) => (
+            <span className="font-medium text-zinc-100">{info.getValue()}</span>
+        ),
+    }),
+    columnHelper.accessor("race_type", {
+        header: "Type",
+        cell: (info) => <RaceTypeBadge type={info.getValue()} />,
+    }),
+    columnHelper.accessor("race_name", {
+        header: "Race",
+        cell: (info) => <span className="text-zinc-300">{info.getValue()}</span>,
+    }),
+    columnHelper.accessor("distance", {
+        header: "Dist",
+        cell: (info) => <NullValue value={info.getValue()} />,
+    }),
+    columnHelper.accessor("time_ms", {
+        header: "Time",
+        cell: (info) => (
+            <span className="font-semibold">
+                <TimeValue ms={info.getValue()} />
+            </span>
+        ),
+    }),
+    columnHelper.accessor("event_date", {
+        header: "Date",
+        cell: (info) => (
+            <span className="text-zinc-400">
+                {new Date(info.getValue()).toLocaleDateString()}
+            </span>
+        ),
+    }),
+    columnHelper.accessor("age_group", {
+        header: "Age",
+        cell: (info) => <NullValue value={info.getValue()} />,
+    }),
+    columnHelper.accessor("gender", {
+        header: "Sex",
+        cell: (info) => <NullValue value={info.getValue()} />,
+    }),
+    columnHelper.accessor("swim_distance", {
+        header: "Swim",
+        cell: (info) => <NullValue value={info.getValue()} />,
+    }),
+    columnHelper.accessor("swim_time_ms", {
+        header: "Swim T",
+        cell: (info) => <TimeValue ms={info.getValue()} />,
+    }),
+    columnHelper.accessor("bike_distance", {
+        header: "Bike",
+        cell: (info) => <NullValue value={info.getValue()} />,
+    }),
+    columnHelper.accessor("bike_time_ms", {
+        header: "Bike T",
+        cell: (info) => <TimeValue ms={info.getValue()} />,
+    }),
+    columnHelper.accessor("run_distance", {
+        header: "Run",
+        cell: (info) => <NullValue value={info.getValue()} />,
+    }),
+    columnHelper.accessor("run_time_ms", {
+        header: "Run T",
+        cell: (info) => <TimeValue ms={info.getValue()} />,
+    }),
+    columnHelper.accessor("transition1_time_ms", {
+        header: "T1",
+        cell: (info) => <TimeValue ms={info.getValue()} />,
+    }),
+    columnHelper.accessor("transition2_time_ms", {
+        header: "T2",
+        cell: (info) => <TimeValue ms={info.getValue()} />,
+    }),
+];
+
 export default function Home() {
-    const [results, setResults] = useState<RaceResult[]>([]);
+    const [data, setData] = useState<RaceResult[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const [filters, setFilters] = useState({
-        personId: "",
-        raceType: "All",
-        raceName: "All",
-        distance: "All",
-        ageGroup: "All",
-        gender: "All",
-        minTime: "",
-        maxTime: "",
+    const [sorting, setSorting] = useState<SortingState>([]);
+    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+    const [globalFilter, setGlobalFilter] = useState("");
+    const [pagination, setPagination] = useState({
+        pageIndex: 0,
+        pageSize: 10,
     });
-
-    const [sortConfig, setSortConfig] = useState<{
-        column: keyof RaceResult;
-        direction: "asc" | "desc";
-    }>({ column: "time_ms", direction: "asc" });
-
-    const [limit, setLimit] = useState(10);
-    const [offset, setOffset] = useState(0);
     const [totalCount, setTotalCount] = useState(0);
+
+    const filters = useMemo(
+        () => ({
+            personId:
+                (columnFilters.find((f) => f.id === "person_id")?.value as string) ||
+                "",
+            raceType:
+                (columnFilters.find((f) => f.id === "race_type")?.value as string) ||
+                "All",
+            raceName:
+                (columnFilters.find((f) => f.id === "race_name")?.value as string) ||
+                "All",
+            distance:
+                (columnFilters.find((f) => f.id === "distance")?.value as string) ||
+                "All",
+            ageGroup:
+                (columnFilters.find((f) => f.id === "age_group")?.value as string) ||
+                "All",
+            gender:
+                (columnFilters.find((f) => f.id === "gender")?.value as string) ||
+                "All",
+        }),
+        [columnFilters],
+    );
 
     const fetchResults = useCallback(async () => {
         if (!supabase) {
@@ -257,24 +360,22 @@ export default function Home() {
                 query = query.eq("gender", filters.gender);
             }
 
-            if (filters.minTime) {
-                query = query.gte("time_ms", parseInt(filters.minTime));
+            const sortColumn = sorting[0]?.id;
+            const sortDirection = sorting[0]?.desc ? "desc" : "asc";
+            if (sortColumn) {
+                query = query.order(sortColumn, { ascending: sortDirection === "asc" });
+            } else {
+                query = query.order("time_ms", { ascending: true });
             }
 
-            if (filters.maxTime) {
-                query = query.lte("time_ms", parseInt(filters.maxTime));
-            }
+            const offset = pagination.pageIndex * pagination.pageSize;
+            query = query.range(offset, offset + pagination.pageSize - 1);
 
-            query = query.order(sortConfig.column, {
-                ascending: sortConfig.direction === "asc",
-            });
-            query = query.range(offset, offset + limit - 1);
-
-            const { data, count, error: supabaseError } = await query;
+            const { data: results, count, error: supabaseError } = await query;
 
             if (supabaseError) throw supabaseError;
 
-            setResults(data || []);
+            setData(results || []);
             setTotalCount(count || 0);
         } catch (err) {
             setError(
@@ -283,34 +384,76 @@ export default function Home() {
         } finally {
             setLoading(false);
         }
-    }, [filters, sortConfig, limit, offset]);
+    }, [filters, sorting, pagination]);
 
     useEffect(() => {
         fetchResults();
     }, [fetchResults]);
 
-    function handleFilterChange(field: string, value: string) {
-        setFilters((prev) => ({ ...prev, [field]: value }));
-        setOffset(0);
-    }
+    const table = useReactTable({
+        data,
+        columns,
+        state: {
+            sorting,
+            columnFilters,
+            globalFilter,
+            pagination,
+        },
+        onSortingChange: setSorting,
+        onColumnFiltersChange: setColumnFilters,
+        onGlobalFilterChange: setGlobalFilter,
+        onPaginationChange: setPagination,
+        getCoreRowModel: getCoreRowModel(),
+        getFilteredRowModel: getFilteredRowModel(),
+        getSortedRowModel: getSortedRowModel(),
+        getPaginationRowModel: getPaginationRowModel(),
+        manualSorting: true,
+        manualFiltering: true,
+        manualPagination: true,
+        pageCount: Math.ceil(totalCount / pagination.pageSize),
+    });
 
-    function handleSortChange(column: keyof RaceResult) {
-        setSortConfig((prev) => ({
-            column,
-            direction:
-                prev.column === column && prev.direction === "asc"
-                    ? "desc"
-                    : "asc",
-        }));
+    function handleFilterChange(field: string, value: string) {
+        const columnIdMap: Record<string, string> = {
+            personId: "person_id",
+            raceType: "race_type",
+            raceName: "race_name",
+            distance: "distance",
+            ageGroup: "age_group",
+            gender: "gender",
+        };
+
+        const columnId = columnIdMap[field];
+        if (!columnId) return;
+
+        setColumnFilters((prev) => {
+            const existing = prev.find((f) => f.id === columnId);
+            if (value === "All" || value === "") {
+                return existing
+                    ? prev.filter((f) => f.id !== columnId)
+                    : prev;
+            }
+            if (existing) {
+                return prev.map((f) =>
+                    f.id === columnId ? { ...f, value } : f,
+                );
+            }
+            return [...prev, { id: columnId, value }];
+        });
+
+        setPagination((prev) => ({ ...prev, pageIndex: 0 }));
     }
 
     function handleLimitChange(newLimit: number) {
-        setLimit(newLimit);
-        setOffset(0);
+        setPagination((prev) => ({
+            ...prev,
+            pageSize: newLimit,
+            pageIndex: 0,
+        }));
     }
 
-    const totalPages = Math.ceil(totalCount / limit);
-    const currentPage = Math.floor(offset / limit) + 1;
+    const currentPage = pagination.pageIndex + 1;
+    const totalPages = Math.ceil(totalCount / pagination.pageSize);
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 p-8">
@@ -344,9 +487,7 @@ export default function Home() {
                             </label>
                             <Input
                                 value={filters.personId}
-                                onChange={(v) =>
-                                    handleFilterChange("personId", v)
-                                }
+                                onChange={(v) => handleFilterChange("personId", v)}
                                 placeholder="Search..."
                             />
                         </div>
@@ -357,9 +498,7 @@ export default function Home() {
                             </label>
                             <Select
                                 value={filters.raceType}
-                                onChange={(v) =>
-                                    handleFilterChange("raceType", v)
-                                }
+                                onChange={(v) => handleFilterChange("raceType", v)}
                                 options={RACE_TYPES}
                             />
                         </div>
@@ -370,9 +509,7 @@ export default function Home() {
                             </label>
                             <Select
                                 value={filters.raceName}
-                                onChange={(v) =>
-                                    handleFilterChange("raceName", v)
-                                }
+                                onChange={(v) => handleFilterChange("raceName", v)}
                                 options={RACES}
                             />
                         </div>
@@ -383,9 +520,7 @@ export default function Home() {
                             </label>
                             <Select
                                 value={filters.distance}
-                                onChange={(v) =>
-                                    handleFilterChange("distance", v)
-                                }
+                                onChange={(v) => handleFilterChange("distance", v)}
                                 options={DISTANCES}
                             />
                         </div>
@@ -396,9 +531,7 @@ export default function Home() {
                             </label>
                             <Select
                                 value={filters.ageGroup}
-                                onChange={(v) =>
-                                    handleFilterChange("ageGroup", v)
-                                }
+                                onChange={(v) => handleFilterChange("ageGroup", v)}
                                 options={AGE_GROUPS}
                             />
                         </div>
@@ -409,9 +542,7 @@ export default function Home() {
                             </label>
                             <Select
                                 value={filters.gender}
-                                onChange={(v) =>
-                                    handleFilterChange("gender", v)
-                                }
+                                onChange={(v) => handleFilterChange("gender", v)}
                                 options={GENDERS}
                             />
                         </div>
@@ -422,18 +553,74 @@ export default function Home() {
                             </label>
                             <div className="flex gap-2">
                                 <Input
-                                    value={filters.minTime}
-                                    onChange={(v) =>
-                                        handleFilterChange("minTime", v)
+                                    value={
+                                        (columnFilters.find(
+                                            (f) => f.id === "min_time",
+                                        )?.value as string) || ""
                                     }
+                                    onChange={(v) => {
+                                        setColumnFilters((prev) => {
+                                            const existing = prev.find(
+                                                (f) => f.id === "min_time",
+                                            );
+                                            if (!v) {
+                                                return existing
+                                                    ? prev.filter(
+                                                          (f) =>
+                                                              f.id !==
+                                                              "min_time",
+                                                      )
+                                                    : prev;
+                                            }
+                                            if (existing) {
+                                                return prev.map((f) =>
+                                                    f.id === "min_time"
+                                                        ? { ...f, value: v }
+                                                        : f,
+                                                );
+                                            }
+                                            return [
+                                                ...prev,
+                                                { id: "min_time", value: v },
+                                            ];
+                                        });
+                                    }}
                                     placeholder="Min"
                                     type="number"
                                 />
                                 <Input
-                                    value={filters.maxTime}
-                                    onChange={(v) =>
-                                        handleFilterChange("maxTime", v)
+                                    value={
+                                        (columnFilters.find(
+                                            (f) => f.id === "max_time",
+                                        )?.value as string) || ""
                                     }
+                                    onChange={(v) => {
+                                        setColumnFilters((prev) => {
+                                            const existing = prev.find(
+                                                (f) => f.id === "max_time",
+                                            );
+                                            if (!v) {
+                                                return existing
+                                                    ? prev.filter(
+                                                          (f) =>
+                                                              f.id !==
+                                                              "max_time",
+                                                      )
+                                                    : prev;
+                                            }
+                                            if (existing) {
+                                                return prev.map((f) =>
+                                                    f.id === "max_time"
+                                                        ? { ...f, value: v }
+                                                        : f,
+                                                );
+                                            }
+                                            return [
+                                                ...prev,
+                                                { id: "max_time", value: v },
+                                            ];
+                                        });
+                                    }}
                                     placeholder="Max"
                                     type="number"
                                 />
@@ -446,7 +633,7 @@ export default function Home() {
                     <div className="flex items-center gap-3">
                         <span className="text-sm text-zinc-400">Show</span>
                         <Select
-                            value={String(limit)}
+                            value={String(pagination.pageSize)}
                             onChange={(v) => handleLimitChange(Number(v))}
                             options={LIMITS.map(String)}
                             className="w-20"
@@ -455,9 +642,12 @@ export default function Home() {
                     </div>
 
                     <div className="text-sm text-zinc-400">
-                        Showing {totalCount > 0 ? offset + 1 : 0} to{" "}
-                        {Math.min(offset + limit, totalCount)} of {totalCount}{" "}
-                        results
+                        Showing {totalCount > 0 ? pagination.pageIndex * pagination.pageSize + 1 : 0} to{" "}
+                        {Math.min(
+                            (pagination.pageIndex + 1) * pagination.pageSize,
+                            totalCount,
+                        )}{" "}
+                        of {totalCount} results
                     </div>
                 </div>
 
@@ -465,183 +655,38 @@ export default function Home() {
                     <div className="overflow-x-auto">
                         <table className="min-w-full">
                             <thead>
-                                <tr className="border-b border-zinc-800 bg-zinc-800/50">
-                                    <th
-                                        onClick={() =>
-                                            handleSortChange("person_id")
-                                        }
-                                        className="cursor-pointer px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 transition-colors hover:text-purple-400"
+                                {table.getHeaderGroups().map((headerGroup) => (
+                                    <tr
+                                        key={headerGroup.id}
+                                        className="border-b border-zinc-800 bg-zinc-800/50"
                                     >
-                                        <div className="flex items-center gap-1">
-                                            ID{" "}
-                                            {sortConfig.column ===
-                                                "person_id" && (
-                                                <span className="text-purple-400">
-                                                    {sortConfig.direction ===
-                                                    "asc"
-                                                        ? "↑"
-                                                        : "↓"}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </th>
-                                    <th
-                                        onClick={() =>
-                                            handleSortChange("race_type")
-                                        }
-                                        className="cursor-pointer px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 transition-colors hover:text-purple-400"
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            Type{" "}
-                                            {sortConfig.column ===
-                                                "race_type" && (
-                                                <span className="text-purple-400">
-                                                    {sortConfig.direction ===
-                                                    "asc"
-                                                        ? "↑"
-                                                        : "↓"}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </th>
-                                    <th
-                                        onClick={() =>
-                                            handleSortChange("race_name")
-                                        }
-                                        className="cursor-pointer px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 transition-colors hover:text-purple-400"
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            Race{" "}
-                                            {sortConfig.column ===
-                                                "race_name" && (
-                                                <span className="text-purple-400">
-                                                    {sortConfig.direction ===
-                                                    "asc"
-                                                        ? "↑"
-                                                        : "↓"}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </th>
-                                    <th
-                                        onClick={() =>
-                                            handleSortChange("distance")
-                                        }
-                                        className="cursor-pointer px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 transition-colors hover:text-purple-400"
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            Dist{" "}
-                                            {sortConfig.column ===
-                                                "distance" && (
-                                                <span className="text-purple-400">
-                                                    {sortConfig.direction ===
-                                                    "asc"
-                                                        ? "↑"
-                                                        : "↓"}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </th>
-                                    <th
-                                        onClick={() =>
-                                            handleSortChange("time_ms")
-                                        }
-                                        className="cursor-pointer px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 transition-colors hover:text-purple-400"
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            Time{" "}
-                                            {sortConfig.column ===
-                                                "time_ms" && (
-                                                <span className="text-purple-400">
-                                                    {sortConfig.direction ===
-                                                    "asc"
-                                                        ? "↑"
-                                                        : "↓"}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </th>
-                                    <th
-                                        onClick={() =>
-                                            handleSortChange("event_date")
-                                        }
-                                        className="cursor-pointer px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 transition-colors hover:text-purple-400"
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            Date{" "}
-                                            {sortConfig.column ===
-                                                "event_date" && (
-                                                <span className="text-purple-400">
-                                                    {sortConfig.direction ===
-                                                    "asc"
-                                                        ? "↑"
-                                                        : "↓"}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </th>
-                                    <th
-                                        onClick={() =>
-                                            handleSortChange("age_group")
-                                        }
-                                        className="cursor-pointer px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 transition-colors hover:text-purple-400"
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            Age{" "}
-                                            {sortConfig.column ===
-                                                "age_group" && (
-                                                <span className="text-purple-400">
-                                                    {sortConfig.direction ===
-                                                    "asc"
-                                                        ? "↑"
-                                                        : "↓"}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </th>
-                                    <th
-                                        onClick={() =>
-                                            handleSortChange("gender")
-                                        }
-                                        className="cursor-pointer px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 transition-colors hover:text-purple-400"
-                                    >
-                                        <div className="flex items-center gap-1">
-                                            Sex{" "}
-                                            {sortConfig.column === "gender" && (
-                                                <span className="text-purple-400">
-                                                    {sortConfig.direction ===
-                                                    "asc"
-                                                        ? "↑"
-                                                        : "↓"}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </th>
-                                    <th className="px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                                        Swim
-                                    </th>
-                                    <th className="px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                                        Swim T
-                                    </th>
-                                    <th className="px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                                        Bike
-                                    </th>
-                                    <th className="px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                                        Bike T
-                                    </th>
-                                    <th className="px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                                        Run
-                                    </th>
-                                    <th className="px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                                        Run T
-                                    </th>
-                                    <th className="px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                                        T1
-                                    </th>
-                                    <th className="px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                                        T2
-                                    </th>
-                                </tr>
+                                        {headerGroup.headers.map((header) => (
+                                            <th
+                                                key={header.id}
+                                                onClick={
+                                                    header.column.getToggleSortingHandler()
+                                                }
+                                                className="cursor-pointer px-2 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 transition-colors hover:text-purple-400"
+                                            >
+                                                <div className="flex items-center gap-1">
+                                                    {flexRender(
+                                                        header.column.columnDef
+                                                            .header,
+                                                        header.getContext(),
+                                                    )}
+                                                    {header.column.getIsSorted() && (
+                                                        <span className="text-purple-400">
+                                                            {header.column.getIsSorted() ===
+                                                            "asc"
+                                                                ? "↑"
+                                                                : "↓"}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </th>
+                                        ))}
+                                    </tr>
+                                ))}
                             </thead>
                             <tbody className="divide-y divide-zinc-800">
                                 {loading ? (
@@ -683,7 +728,7 @@ export default function Home() {
                                             Error: {error}
                                         </td>
                                     </tr>
-                                ) : results.length === 0 ? (
+                                ) : table.getRowModel().rows.length === 0 ? (
                                     <tr>
                                         <td
                                             colSpan={16}
@@ -693,91 +738,23 @@ export default function Home() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    results.map((result) => (
+                                    table.getRowModel().rows.map((row) => (
                                         <tr
-                                            key={result.id}
+                                            key={row.id}
                                             className="transition-colors hover:bg-zinc-800/30"
                                         >
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm font-medium text-zinc-100">
-                                                {result.person_id}
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3">
-                                                <RaceTypeBadge
-                                                    type={result.race_type}
-                                                />
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm text-zinc-300">
-                                                {result.race_name}
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm text-zinc-400">
-                                                <NullValue
-                                                    value={result.distance}
-                                                />
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm font-semibold">
-                                                <TimeValue
-                                                    ms={result.time_ms}
-                                                />
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm text-zinc-400">
-                                                {new Date(
-                                                    result.event_date,
-                                                ).toLocaleDateString()}
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm text-zinc-400">
-                                                <NullValue
-                                                    value={result.age_group}
-                                                />
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm text-zinc-400">
-                                                <NullValue
-                                                    value={result.gender}
-                                                />
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm text-zinc-500">
-                                                <NullValue
-                                                    value={result.swim_distance}
-                                                />
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm text-zinc-500">
-                                                <TimeValue
-                                                    ms={result.swim_time_ms}
-                                                />
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm text-zinc-500">
-                                                <NullValue
-                                                    value={result.bike_distance}
-                                                />
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm text-zinc-500">
-                                                <TimeValue
-                                                    ms={result.bike_time_ms}
-                                                />
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm text-zinc-500">
-                                                <NullValue
-                                                    value={result.run_distance}
-                                                />
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm text-zinc-500">
-                                                <TimeValue
-                                                    ms={result.run_time_ms}
-                                                />
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm text-zinc-500">
-                                                <TimeValue
-                                                    ms={
-                                                        result.transition1_time_ms
-                                                    }
-                                                />
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-3 text-sm text-zinc-500">
-                                                <TimeValue
-                                                    ms={
-                                                        result.transition2_time_ms
-                                                    }
-                                                />
-                                            </td>
+                                            {row.getVisibleCells().map((cell) => (
+                                                <td
+                                                    key={cell.id}
+                                                    className="whitespace-nowrap px-2 py-3 text-sm"
+                                                >
+                                                    {flexRender(
+                                                        cell.column.columnDef
+                                                            .cell,
+                                                        cell.getContext(),
+                                                    )}
+                                                </td>
+                                            ))}
                                         </tr>
                                     ))
                                 )}
@@ -788,8 +765,13 @@ export default function Home() {
 
                 <div className="mt-6 flex items-center justify-between">
                     <button
-                        onClick={() => setOffset(offset - limit)}
-                        disabled={offset === 0}
+                        onClick={() =>
+                            setPagination((prev) => ({
+                                ...prev,
+                                pageIndex: prev.pageIndex - 1,
+                            }))
+                        }
+                        disabled={pagination.pageIndex === 0}
                         className="rounded-lg border border-zinc-700 bg-zinc-800 px-5 py-2.5 text-sm font-medium text-zinc-300 transition-all hover:border-purple-500 hover:text-purple-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-700 disabled:hover:text-zinc-300"
                     >
                         Previous
@@ -804,8 +786,16 @@ export default function Home() {
                         </span>
                     </div>
                     <button
-                        onClick={() => setOffset(offset + limit)}
-                        disabled={offset + limit >= totalCount}
+                        onClick={() =>
+                            setPagination((prev) => ({
+                                ...prev,
+                                pageIndex: prev.pageIndex + 1,
+                            }))
+                        }
+                        disabled={
+                            (pagination.pageIndex + 1) * pagination.pageSize >=
+                            totalCount
+                        }
                         className="rounded-lg border border-zinc-700 bg-zinc-800 px-5 py-2.5 text-sm font-medium text-zinc-300 transition-all hover:border-purple-500 hover:text-purple-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-700 disabled:hover:text-zinc-300"
                     >
                         Next

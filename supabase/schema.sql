@@ -1,3 +1,23 @@
+-- Person ID Mapping Table
+DROP TABLE IF EXISTS person_ids;
+
+CREATE TABLE person_ids (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  external_id VARCHAR(50) NOT NULL UNIQUE,  -- Bib number or other external ID
+  name VARCHAR(255) NOT NULL,
+  team_name VARCHAR(255),
+  city VARCHAR(100),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS
+ALTER TABLE person_ids ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public read" ON person_ids FOR SELECT USING (true);
+CREATE POLICY "Allow public insert" ON person_ids FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update" ON person_ids FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete" ON person_ids FOR DELETE USING (false);
+
 -- Race Results Table
 -- Supports Running, Duoathlon, and Triathlon events
 -- All time fields are in milliseconds (integer)
@@ -6,7 +26,7 @@ DROP TABLE IF EXISTS race_results;
 
 CREATE TABLE race_results (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  person_id VARCHAR(50) NOT NULL,
+  person_id VARCHAR(50) NOT NULL REFERENCES person_ids(external_id),
   race_type VARCHAR(50) NOT NULL,  -- 'running', 'duoathlon', 'triathlon'
   race_name VARCHAR(255) NOT NULL,
   
