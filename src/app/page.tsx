@@ -356,7 +356,7 @@ export default function Home() {
             `)
             .then(({ data, error: e }) => {
                 if (e) { setError(e.message); setLoading(false); return; }
-                const rows = (data as RawResult[])
+                const rows = (data as unknown as RawResult[])
                     .map(toDisplayRow)
                     .filter((r): r is DisplayRow => r !== null)
                     .sort((a, b) => a.chip_ms - b.chip_ms);
