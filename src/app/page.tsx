@@ -1,17 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import {
-    useReactTable,
-    getCoreRowModel,
-    getFilteredRowModel,
-    getSortedRowModel,
-    getPaginationRowModel,
-    flexRender,
-    createColumnHelper,
-    SortingState,
-    ColumnFiltersState,
-} from "@tanstack/react-table";
+
 import { supabase } from "@/lib/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -336,123 +326,19 @@ function SplitsChart({ result, avgResult }: { result: DisplayRow; avgResult: Dis
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-const columnHelper = createColumnHelper<RaceResult>();
-
-const columns = [
-    columnHelper.accessor("person_id", {
-        header: "ID",
-        cell: (info) => (
-            <span className="font-medium text-zinc-100">{info.getValue()}</span>
-        ),
-    }),
-    columnHelper.accessor("race_type", {
-        header: "Type",
-        cell: (info) => <RaceTypeBadge type={info.getValue()} />,
-    }),
-    columnHelper.accessor("race_name", {
-        header: "Race",
-        cell: (info) => <span className="text-zinc-300">{info.getValue()}</span>,
-    }),
-    columnHelper.accessor("distance", {
-        header: "Dist",
-        cell: (info) => <NullValue value={info.getValue()} />,
-    }),
-    columnHelper.accessor("time_ms", {
-        header: "Time",
-        cell: (info) => (
-            <span className="font-semibold">
-                <TimeValue ms={info.getValue()} />
-            </span>
-        ),
-    }),
-    columnHelper.accessor("event_date", {
-        header: "Date",
-        cell: (info) => (
-            <span className="text-zinc-400">
-                {new Date(info.getValue()).toLocaleDateString()}
-            </span>
-        ),
-    }),
-    columnHelper.accessor("age_group", {
-        header: "Age",
-        cell: (info) => <NullValue value={info.getValue()} />,
-    }),
-    columnHelper.accessor("gender", {
-        header: "Sex",
-        cell: (info) => <NullValue value={info.getValue()} />,
-    }),
-    columnHelper.accessor("swim_distance", {
-        header: "Swim",
-        cell: (info) => <NullValue value={info.getValue()} />,
-    }),
-    columnHelper.accessor("swim_time_ms", {
-        header: "Swim T",
-        cell: (info) => <TimeValue ms={info.getValue()} />,
-    }),
-    columnHelper.accessor("bike_distance", {
-        header: "Bike",
-        cell: (info) => <NullValue value={info.getValue()} />,
-    }),
-    columnHelper.accessor("bike_time_ms", {
-        header: "Bike T",
-        cell: (info) => <TimeValue ms={info.getValue()} />,
-    }),
-    columnHelper.accessor("run_distance", {
-        header: "Run",
-        cell: (info) => <NullValue value={info.getValue()} />,
-    }),
-    columnHelper.accessor("run_time_ms", {
-        header: "Run T",
-        cell: (info) => <TimeValue ms={info.getValue()} />,
-    }),
-    columnHelper.accessor("transition1_time_ms", {
-        header: "T1",
-        cell: (info) => <TimeValue ms={info.getValue()} />,
-    }),
-    columnHelper.accessor("transition2_time_ms", {
-        header: "T2",
-        cell: (info) => <TimeValue ms={info.getValue()} />,
-    }),
-];
-
 export default function Home() {
-    const [data, setData] = useState<RaceResult[]>([]);
+    const [allResults, setAllResults] = useState<DisplayRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedResult, setSelectedResult] = useState<DisplayRow | null>(null);
-
-    const [sorting, setSorting] = useState<SortingState>([]);
-    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-    const [globalFilter, setGlobalFilter] = useState("");
-    const [pagination, setPagination] = useState({
-        pageIndex: 0,
-        pageSize: 10,
-    });
-    const [totalCount, setTotalCount] = useState(0);
-
-    const filters = useMemo(
-        () => ({
-            personId:
-                (columnFilters.find((f) => f.id === "person_id")?.value as string) ||
-                "",
-            raceType:
-                (columnFilters.find((f) => f.id === "race_type")?.value as string) ||
-                "All",
-            raceName:
-                (columnFilters.find((f) => f.id === "race_name")?.value as string) ||
-                "All",
-            distance:
-                (columnFilters.find((f) => f.id === "distance")?.value as string) ||
-                "All",
-            ageGroup:
-                (columnFilters.find((f) => f.id === "age_group")?.value as string) ||
-                "All",
-            gender:
-                (columnFilters.find((f) => f.id === "gender")?.value as string) ||
-                "All",
-        }),
-        [columnFilters],
-    );
+    const [scOnly, setScOnly] = useState(false);
+    const [genderFilter, setGenderFilter] = useState("All");
+    const [ageGroupFilter, setAgeGroupFilter] = useState("All");
+    const [teamFilter, setTeamFilter] = useState("All");
+    const [sortKey, setSortKey] = useState<keyof DisplayRow>("chip_ms");
+    const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+    const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = useState(25);
 
     const fetchResults = useCallback(async () => {
         if (!supabase) {
@@ -478,6 +364,8 @@ export default function Home() {
                 setLoading(false);
             });
     }, []);
+
+    useEffect(() => { fetchResults(); }, [fetchResults]);
 
     // Derived filter options from data
     const uniqueTeams = useMemo(() => {
