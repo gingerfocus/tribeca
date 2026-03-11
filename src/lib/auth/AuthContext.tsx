@@ -21,7 +21,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "admin@example.com";
+
+const isDev = process.env.NODE_ENV === "development";
+
+function devLog(...args: unknown[]) {
+    if (isDev) {
+        console.log("[Auth]", ...args);
+    }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
@@ -29,32 +37,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [isAdmin, setIsAdmin] = useState(false);
 
     const adminEmails = useMemo(() => {
-        return (ADMIN_EMAIL || "admin@nonexistant-email-address.org")
+        return (ADMIN_EMAIL || "admin@example.com")
             .split(",")
             .map((e) => e.trim().toLowerCase());
     }, []);
 
     useEffect(() => {
         if (!supabase) {
+            devLog("Supabase not configured, skipping auth init");
             return;
         }
 
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        devLog("Initializing auth, getting session...");
+
+        supabase.auth.getSession().then(({ data: { session }, error }) => {
+            if (error) {
+                devLog("Error getting session:", error.message);
+            }
             const currentUser = session?.user ?? null;
+            devLog("Session loaded:", currentUser ? `User: ${currentUser.email}` : "No user");
             setUser(currentUser);
             if (currentUser) {
-                setIsAdmin(adminEmails.includes(currentUser.email?.toLowerCase() || ""));
+                const admin = adminEmails.includes(currentUser.email?.toLowerCase() || "");
+                devLog("Admin check:", admin ? "GRANTED" : "DENIED", `Email: ${currentUser.email}`);
+                setIsAdmin(admin);
             }
             setLoading(false);
         });
 
         const {
             data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
+        } = supabase.auth.onAuthStateChange((event, session) => {
+            devLog("Auth event:", event, session ? `User: ${session.user?.email}` : "No session");
             const currentUser = session?.user ?? null;
             setUser(currentUser);
             if (currentUser) {
-                setIsAdmin(adminEmails.includes(currentUser.email?.toLowerCase() || ""));
+                const admin = adminEmails.includes(currentUser.email?.toLowerCase() || "");
+                setIsAdmin(admin);
             } else {
                 setIsAdmin(false);
             }
@@ -64,7 +83,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, [adminEmails]);
 
     const signIn = async (password: string) => {
+        devLog("Attempting sign in for:", ADMIN_EMAIL);
+        
         if (!supabase) {
+            devLog("ERROR: Supabase not configured");
             return { error: new Error("Supabase not configured") };
         }
 
@@ -74,15 +96,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         if (error) {
+            devLog("Sign in error:", error.message);
             return { error };
         }
 
+        devLog("Sign in successful");
         return { error: null };
     };
 
     const signOut = async () => {
+        devLog("Signing out...");
         if (!supabase) return;
         await supabase.auth.signOut();
+        devLog("Signed out");
     };
 
     return (
