@@ -104,32 +104,52 @@ export async function POST(request: NextRequest) {
         if (raceError) throw raceError;
 
         const athleteMap = new Map<string, number>();
-        const athleteInserts: { name: string; team: string | null; city: string | null; gender: string | null }[] = [];
+        const uniqueAthleteKeys = [...new Set(rows.map((row) => `${row.name.toLowerCase()}-${(row.team || "").toLowerCase()}`))];
 
-        for (const row of rows) {
-            const athleteKey = `${row.name.toLowerCase()}-${(row.team || "").toLowerCase()}`;
-            if (!athleteMap.has(athleteKey)) {
-                athleteInserts.push({
-                    name: row.name,
-                    team: row.team || null,
-                    city: row.city || null,
-                    gender: row.gender || null,
-                });
-                athleteMap.set(athleteKey, -1);
-            }
-        }
-
-        if (athleteInserts.length > 0) {
-            const { data: athletes, error: athleteError } = await supabase
+        if (uniqueAthleteKeys.length > 0) {
+            const { data: existingAthletes } = await supabase
                 .from("athletes")
-                .upsert(athleteInserts, { onConflict: "name" })
-                .select();
+                .select("id, name, team")
+                .in("name", uniqueAthleteKeys.map((k) => k.split("-")[0]));
 
-            if (athleteError) throw athleteError;
+            if (existingAthletes) {
+                for (const athlete of existingAthletes) {
+                    const athleteKey = `${athlete.name.toLowerCase()}-${(athlete.team || "").toLowerCase()}`;
+                    athleteMap.set(athleteKey, athlete.id);
+                }
+            }
 
-            for (let i = 0; i < athletes.length; i++) {
-                const athleteKey = `${athleteInserts[i].name.toLowerCase()}-${(athleteInserts[i].team || "").toLowerCase()}`;
-                athleteMap.set(athleteKey, athletes[i].id);
+            const athleteInserts: { name: string; team: string | null; city: string | null; gender: string | null }[] = [];
+            for (const row of rows) {
+                const athleteKey = `${row.name.toLowerCase()}-${(row.team || "").toLowerCase()}`;
+                if (!athleteMap.has(athleteKey)) {
+                    athleteInserts.push({
+                        name: row.name,
+                        team: row.team || null,
+                        city: row.city || null,
+                        gender: row.gender || null,
+                    });
+                }
+            }
+
+            const uniqueInserts = athleteInserts.filter(
+                (v, i, a) => a.findIndex((t) => t.name === v.name && t.team === v.team) === i
+            );
+
+            if (uniqueInserts.length > 0) {
+                const { data: newAthletes, error: athleteError } = await supabase
+                    .from("athletes")
+                    .insert(uniqueInserts)
+                    .select();
+
+                if (athleteError) throw athleteError;
+
+                if (newAthletes) {
+                    for (const athlete of newAthletes) {
+                        const athleteKey = `${athlete.name.toLowerCase()}-${(athlete.team || "").toLowerCase()}`;
+                        athleteMap.set(athleteKey, athlete.id);
+                    }
+                }
             }
         }
 
@@ -158,7 +178,7 @@ export async function POST(request: NextRequest) {
         if (resultInserts.length > 0) {
             const { error: insertError } = await supabase
                 .from("results")
-                .upsert(resultInserts, { onConflict: "race_id,athlete_bib" });
+                .insert(resultInserts);
 
             if (insertError) throw insertError;
         }
