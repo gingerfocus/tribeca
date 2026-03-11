@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \":*)",
+      "Bash(python \"c:/Users/User/Documents/tribeca/scripts/gen_seed.py\")",
+      "Bash(\"c:/Users/User/Documents/tribeca/supabase/seed.sql\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(python scripts/gen_seed.py)"
+    ]
+  }
+}

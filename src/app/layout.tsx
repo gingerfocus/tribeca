@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Products Database",
-  description: "Browse and filter products from Supabase database",
+  title: "Treeathlon 2026 Results",
+  description: "Race results for the 2026 Treeathlon sprint triathlon",
 };
 
 export default function RootLayout({

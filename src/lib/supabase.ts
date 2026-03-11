@@ -13,7 +13,6 @@ function getSupabaseClient(): SupabaseInstance {
         supabaseUrl = "https://chkulbjaexjhqzltdfth.supabase.co";
         supabasePublishableKey = "sb_publishable_0T-zu-ZmhPEeJTESOgZfYA_Ff0AcAr8";
     }
-
     if (!supabaseUrl || !supabasePublishableKey) {
         return null;
     }
