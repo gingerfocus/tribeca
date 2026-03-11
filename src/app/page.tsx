@@ -277,7 +277,7 @@ export default function Dashboard() {
                                                 <span className="flex-shrink-0 rounded-full border border-cardinal-200 bg-cardinal-50 px-1.5 py-0.5 text-xs font-medium text-cardinal-700">SCU</span>
                                             )}
                                             <span className="flex-1 font-medium text-gray-800">{r.name}</span>
-                                            <span className="text-xs text-gray-400">{r.gender} · {r.age_group ?? "—"}</span>
+                                            <span className="text-xs text-gray-400">{r.gender}</span>
                                             <span className="font-mono text-xs font-semibold text-cardinal-700">{formatTime(r.chip_ms)}</span>
                                         </button>
                                     );

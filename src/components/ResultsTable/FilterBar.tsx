@@ -10,8 +10,6 @@ interface FilterBarProps {
     setGenderFilter: (v: string) => void;
     divisionFilter: string;
     setDivisionFilter: (v: string) => void;
-    ageGroupFilter: string;
-    setAgeGroupFilter: (v: string) => void;
     teamFilter: string;
     setTeamFilter: (v: string) => void;
     filteredCount: number;
@@ -26,8 +24,6 @@ export function FilterBar({
     setGenderFilter,
     divisionFilter,
     setDivisionFilter,
-    ageGroupFilter,
-    setAgeGroupFilter,
     teamFilter,
     setTeamFilter,
     filteredCount,
@@ -36,13 +32,10 @@ export function FilterBar({
     const teamsSet = new Set(raceResults.map((r) => r.team).filter(Boolean) as string[]);
     const teams = Array.from(teamsSet).sort();
     
-    const ageGroupsSet = new Set(raceResults.map((r) => r.age_group).filter(Boolean) as string[]);
-    const ageGroups = Array.from(ageGroupsSet).sort();
-    
     const divisionsSet = new Set(raceResults.map((r) => r.division).filter(Boolean) as string[]);
     const divisions = Array.from(divisionsSet).sort();
 
-    const hasFilters = scOnly || genderFilter !== "All" || divisionFilter !== "All" || ageGroupFilter !== "All" || teamFilter !== "All";
+    const hasFilters = scOnly || genderFilter !== "All" || divisionFilter !== "All" || teamFilter !== "All";
 
     return (
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -69,12 +62,6 @@ export function FilterBar({
                         </button>
                     ))}
                 </div>
-
-                <select value={ageGroupFilter} onChange={(e) => setAgeGroupFilter(e.target.value)}
-                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none">
-                    <option value="All">All Ages</option>
-                    {ageGroups.map((ag) => <option key={ag} value={ag}>{ag}</option>)}
-                </select>
 
                 <select value={divisionFilter} onChange={(e) => setDivisionFilter(e.target.value)}
                     className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none">

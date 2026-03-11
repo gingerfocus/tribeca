@@ -43,10 +43,6 @@ export const columns: any[] = [
         header: "Sex",
         cell: ({ getValue }) => getValue() ?? <span className="text-gray-200">—</span>,
     }),
-    columnHelper.accessor("age_group", {
-        header: "Age",
-        cell: ({ getValue }) => getValue() ?? <span className="text-gray-200">—</span>,
-    }),
     columnHelper.accessor("chip_ms", {
         header: "Total",
         cell: ({ getValue }) => (

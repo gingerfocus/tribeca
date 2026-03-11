@@ -38,7 +38,6 @@ export interface DisplayRow {
     team: string | null;
     gender: string | null;
     age_at_race: number | null;
-    age_group: string | null;
     race_name: string;
     race_date: string | null;
     race_type: string | null;
@@ -99,16 +98,6 @@ export function intervalToMs(iv: string | null | undefined): number | null {
 export function toDisplayRow(r: RawResult): DisplayRow | null {
     const chip_ms = intervalToMs(r.time_chip);
     if (chip_ms === null) return null;
-    const g   = r.athletes.gender ?? "";
-    const age = r.athlete_age;
-    let age_group: string | null = null;
-    if (age && g) {
-        if (age <= 19) age_group = `${g}18-19`;
-        else {
-            const lo = Math.floor(age / 5) * 5;
-            age_group = `${g}${lo}-${lo + 4}`;
-        }
-    }
     return {
         result_id:      r.result_id,
         bib:            r.athlete_bib,
@@ -116,8 +105,7 @@ export function toDisplayRow(r: RawResult): DisplayRow | null {
         name:           r.athletes.name,
         team:           r.athletes.team,
         gender:         r.athletes.gender,
-        age_at_race:    age,
-        age_group,
+        age_at_race:    r.athlete_age,
         race_name:      r.races.race_name,
         race_date:      r.races.race_date,
         race_type:      r.races.race_type,

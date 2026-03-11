@@ -193,11 +193,7 @@ describe("toDisplayRow", () => {
         expect(result?.name).toBe("John Doe");
         expect(result?.team).toBe("SCU");
         expect(result?.division).toBe("Collegiate");
-    });
-
-    it("calculates age_group for male 20", () => {
-        const result = toDisplayRow(mockRawResult as any);
-        expect(result?.age_group).toBe("M20-24");
+        expect(result?.age_at_race).toBe(20);
     });
 
     it("returns null for null time_chip", () => {

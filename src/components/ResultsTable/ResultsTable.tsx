@@ -8,14 +8,11 @@ import {
     flexRender,
     SortingState,
     PaginationState,
-    Table,
+    VisibilityState,
 } from "@tanstack/react-table";
-import { useState, useMemo } from "react";
-import { DisplayRow, isSantaClara, formatTime, swimPaceStr, bikePaceStr, runPaceStr } from "@/lib/triathlon";
+import { useState } from "react";
+import { DisplayRow, isSantaClara } from "@/lib/triathlon";
 import { columns } from "./columns";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type TableType = any;
 
 interface ResultsTableProps {
     data: DisplayRow[];
@@ -29,14 +26,20 @@ export function ResultsTable({ data, onRowClick, selectedResult }: ResultsTableP
         pageIndex: 0,
         pageSize: 25,
     });
+    const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
+        bib: false,
+        division: false,
+    });
+    const [showColumnMenu, setShowColumnMenu] = useState(false);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const table: any = useReactTable({
         data,
         columns,
-        state: { sorting, pagination },
+        state: { sorting, pagination, columnVisibility },
         onSortingChange: setSorting,
         onPaginationChange: setPagination,
+        onColumnVisibilityChange: setColumnVisibility,
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
         getPaginationRowModel: getPaginationRowModel(),
@@ -49,8 +52,45 @@ export function ResultsTable({ data, onRowClick, selectedResult }: ResultsTableP
     const pageCount = table.getPageCount();
     const currentPage = table.getState().pagination.pageIndex + 1;
 
+    const allColumns = table.getAllLeafColumns();
+
     return (
         <>
+            {/* Column Visibility Toggle */}
+            <div className="flex justify-end mb-2">
+                <div className="relative">
+                    <button
+                        onClick={() => setShowColumnMenu(!showColumnMenu)}
+                        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+                    >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                        </svg>
+                        Columns
+                    </button>
+                    {showColumnMenu && (
+                        <div className="absolute right-0 top-8 z-10 w-48 rounded-lg border border-gray-200 bg-white py-2 shadow-lg">
+                            {allColumns.map((col: any) => (
+                                <label
+                                    key={col.id}
+                                    className="flex items-center gap-2 px-4 py-2 hover:bg-gray-50 cursor-pointer"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={col.getIsVisible()}
+                                        onChange={(e) => col.toggleVisibility(e.target.checked)}
+                                        className="rounded border-gray-300 text-cardinal-600 focus:ring-cardinal-500"
+                                    />
+                                    <span className="text-sm text-gray-600">
+                                        {col.columnDef.header?.toString() || col.id}
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
             {/* Table */}
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="overflow-x-auto">
@@ -78,7 +118,7 @@ export function ResultsTable({ data, onRowClick, selectedResult }: ResultsTableP
                         ))}
                     </select>
                     <span>
-                        · {data.length > 0 ? table.getRowModel().rows[0].index + 1 : 0}–
+                        · {data.length > 0 ? table.getRowModel().rows[0]?.index + 1 : 0}–
                         {Math.min((currentPage) * table.getState().pagination.pageSize, data.length)} of {data.length}
                     </span>
                 </div>
@@ -104,15 +144,15 @@ export function ResultsTable({ data, onRowClick, selectedResult }: ResultsTableP
     );
 }
 
-function TableHeader({ table }: { table: ReturnType<typeof useReactTable> }) {
+function TableHeader({ table }: { table: any }) {
     return (
         <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="w-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">
                     #
                 </th>
-                {table.getHeaderGroups().map((headerGroup) =>
-                    headerGroup.headers.map((header) => (
+                {table.getHeaderGroups().map((headerGroup: any) =>
+                    headerGroup.headers.map((header: any) => (
                         <th
                             key={header.id}
                             onClick={header.column.getToggleSortingHandler()}
@@ -140,7 +180,7 @@ function TableBody({
     onRowClick, 
     selectedResult 
 }: { 
-    table: ReturnType<typeof useReactTable>;
+    table: any;
     onRowClick: (row: DisplayRow) => void;
     selectedResult: DisplayRow | null;
 }) {
@@ -155,7 +195,7 @@ function TableBody({
                     </td>
                 </tr>
             ) : (
-                rows.map((row) => {
+                rows.map((row: any) => {
                     const r = row.original as DisplayRow;
                     const isSC = isSantaClara(r.team);
                     const isSelected = selectedResult?.result_id === r.result_id;
@@ -174,7 +214,7 @@ function TableBody({
                             <td className="px-3 py-2.5 text-xs text-gray-300">
                                 {row.index + 1}
                             </td>
-                            {row.getVisibleCells().map((cell) => (
+                            {row.getVisibleCells().map((cell: any) => (
                                 <td key={cell.id} className="px-3 py-2.5">
                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                 </td>

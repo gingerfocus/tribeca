@@ -102,7 +102,6 @@ export default function RacesPage() {
     const [scOnly, setScOnly]                 = useState(false);
     const [genderFilter, setGenderFilter]     = useState("All");
     const [divisionFilter, setDivisionFilter] = useState("All");
-    const [ageGroupFilter, setAgeGroupFilter] = useState("All");
     const [teamFilter, setTeamFilter]         = useState("All");
 
     const fetchResults = useCallback(async () => {
@@ -174,7 +173,7 @@ export default function RacesPage() {
 
     useEffect(() => {
         setScOnly(false); setGenderFilter("All"); setDivisionFilter("All");
-        setAgeGroupFilter("All"); setTeamFilter("All"); setSelectedResult(null);
+        setTeamFilter("All"); setSelectedResult(null);
     }, [selectedRace]);
 
     const filteredResults = useMemo(() => {
@@ -182,11 +181,10 @@ export default function RacesPage() {
             if (scOnly && !isSantaClara(r.team)) return false;
             if (genderFilter !== "All" && r.gender !== genderFilter) return false;
             if (divisionFilter !== "All" && r.division !== divisionFilter) return false;
-            if (ageGroupFilter !== "All" && r.age_group !== ageGroupFilter) return false;
             if (teamFilter !== "All" && r.team !== teamFilter) return false;
             return true;
         });
-    }, [raceResults, scOnly, genderFilter, divisionFilter, ageGroupFilter, teamFilter]);
+    }, [raceResults, scOnly, genderFilter, divisionFilter, teamFilter]);
 
     const avgResult = useMemo((): DisplayRow | null => {
         const valid = raceResults.filter((r) => r.swim_ms && r.bike_ms && r.run_ms);
@@ -204,7 +202,6 @@ export default function RacesPage() {
         setScOnly(false);
         setGenderFilter("All");
         setDivisionFilter("All");
-        setAgeGroupFilter("All");
         setTeamFilter("All");
     }, []);
 
@@ -276,8 +273,6 @@ export default function RacesPage() {
                     setGenderFilter={setGenderFilter}
                     divisionFilter={divisionFilter}
                     setDivisionFilter={setDivisionFilter}
-                    ageGroupFilter={ageGroupFilter}
-                    setAgeGroupFilter={setAgeGroupFilter}
                     teamFilter={teamFilter}
                     setTeamFilter={setTeamFilter}
                     filteredCount={filteredResults.length}
