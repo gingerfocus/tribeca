@@ -6,30 +6,30 @@ soon(tm) I need to think about the future.
 
 ## Ui
 - [X] Light Theme
-  - [ ] Light Theme for admin Page
+  - [X] Light Theme for admin page
 - [X] Color Scheme
 - [ ] Home Page
 - [ ] Race Pages
 
-## Filtering
-- [X] Draft Legal & Age Group
-
 ## Upload
-- [ ] Identify Errors
-- [x] Collumn Renaming
-- [ ] Reformat Text
-- [ ] Identify Missing Names
+- [X] Identify Errors
+- [X] Collumn Renaming
+- [X] Reformat Text
+- [X] Identify Missing Names
+- [ ] Unify Team Names
+- [ ] Draft Legal
+- [ ] Add constant value options
+
+## Maintence
+- [ ] Security policy and audits
+- [X] Linting
+- [X] Testing
 
 ## Scraping
 - [ ] Create scripts for common result hosts
 
-## Maintence
-- [ ] Security policy and audits
-- [ ] Linting
-- [ ] Testing
-
 ## Code
-- [ ] Move to Tan-stack table
-- [ ] Modularize code
+- [X] Move to Tan-stack table
+- [X] Modularize code
 - [ ] Cache database lookups
 

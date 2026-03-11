@@ -19,9 +19,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950">
-                <div className="flex items-center gap-2 text-zinc-400">
-                    <svg className="h-5 w-5 animate-spin text-purple-500" fill="none" viewBox="0 0 24 24">
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="flex items-center gap-2 text-gray-400">
+                    <svg className="h-5 w-5 animate-spin text-cardinal-700" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
@@ -36,23 +36,23 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950">
-            <header className="border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
+        <div className="min-h-screen bg-gray-50">
+            <header className="border-b border-gray-200 bg-white">
                 <div className="mx-auto flex max-w-7xl items-center justify-between px-8 py-4">
                     <div className="flex items-center gap-4">
                         <Link href="/" className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-maroon-600 to-purple-600">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cardinal-800">
                                 <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                                 </svg>
                             </div>
-                            <span className="text-lg font-semibold text-zinc-100">Tribeca Admin</span>
+                            <span className="text-lg font-semibold text-cardinal-900">Tribeca Admin</span>
                         </Link>
                     </div>
                     <div className="flex items-center gap-4">
                         <Link
                             href="/"
-                            className="text-sm text-zinc-400 hover:text-purple-400 transition-colors"
+                            className="text-sm text-gray-500 hover:text-cardinal-700 transition-colors"
                         >
                             View Results
                         </Link>
@@ -79,7 +79,7 @@ function SignOutButton() {
     return (
         <button
             onClick={handleSignOut}
-            className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:border-red-500 hover:text-red-400"
+            className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-all hover:border-red-300 hover:text-red-600"
         >
             Sign Out ({user?.email})
         </button>

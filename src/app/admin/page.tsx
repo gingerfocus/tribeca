@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { supabase } from "@/lib/supabase";
 
 interface ParsedRow {
     bib: number;
@@ -193,12 +192,6 @@ export default function AdminPage() {
         }
     };
 
-    const deleteMapping = (name: string) => {
-        const updated = savedMappings.filter((m) => m.name !== name);
-        setSavedMappings(updated);
-        localStorage.setItem("csv_mappings", JSON.stringify(updated));
-    };
-
     const handleUpload = async () => {
         if (!file || !raceInfo.race_name) {
             setMessage({ type: "error", text: "Please select a file and enter race name" });
@@ -255,232 +248,234 @@ export default function AdminPage() {
     };
 
     return (
-        <div>
-            <h1 className="mb-8 text-2xl font-bold text-zinc-100">Upload Race Results</h1>
+        <div className="min-h-screen bg-gray-50 p-6">
+            <div className="mx-auto max-w-4xl space-y-6">
+                <h1 className="text-3xl font-bold text-cardinal-900">Upload Race Results</h1>
 
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 backdrop-blur-sm">
-                <h2 className="mb-4 text-lg font-semibold text-zinc-100">CSV Upload</h2>
-                <p className="mb-4 text-sm text-zinc-400">
-                    Upload a CSV file with race results. Column mappings will be auto-detected but can be adjusted.
-                </p>
+                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                    <h2 className="mb-4 text-lg font-semibold text-gray-700">CSV Upload</h2>
+                    <p className="mb-4 text-sm text-gray-500">
+                        Upload a CSV file with race results. Column mappings will be auto-detected but can be adjusted.
+                    </p>
 
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv"
-                    onChange={handleFileChange}
-                    className="mb-4 block w-full text-sm text-zinc-400
-                        file:mr-4 file:rounded-lg file:border-0
-                        file:bg-purple-600 file:px-4 file:py-2
-                        file:text-sm file:font-medium file:text-white
-                        file:cursor-pointer file:transition-all
-                        hover:file:bg-purple-500"
-                />
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".csv"
+                        onChange={handleFileChange}
+                        className="mb-4 block w-full text-sm text-gray-500
+                            file:mr-4 file:rounded-lg file:border-0
+                            file:bg-cardinal-800 file:px-4 file:py-2
+                            file:text-sm file:font-medium file:text-white
+                            file:cursor-pointer file:transition-all
+                            hover:file:bg-cardinal-700"
+                    />
 
-                {message && (
-                    <div
-                        className={`mb-4 rounded-lg px-4 py-3 text-sm ${
-                            message.type === "success"
-                                ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
-                                : "bg-red-500/10 border border-red-500/30 text-red-400"
-                        }`}
-                    >
-                        {message.text}
-                    </div>
-                )}
-
-                {csvHeaders.length > 0 && (
-                    <div className="mb-4 flex items-center gap-4">
-                        <button
-                            onClick={() => setShowMapping(!showMapping)}
-                            className="text-sm text-purple-400 hover:text-purple-300"
+                    {message && (
+                        <div
+                            className={`mb-4 rounded-lg px-4 py-3 text-sm ${
+                                message.type === "success"
+                                    ? "bg-green-50 border border-green-200 text-green-700"
+                                    : "bg-red-50 border border-red-200 text-red-700"
+                            }`}
                         >
-                            {showMapping ? "Hide" : "Show"} Column Mapping
-                        </button>
-                        {savedMappings.length > 0 && (
-                            <select
-                                onChange={(e) => {
-                                    const saved = savedMappings.find((m) => m.name === e.target.value);
-                                    if (saved) loadMapping(saved);
-                                }}
-                                className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-300"
-                                defaultValue=""
-                            >
-                                <option value="">Load saved mapping...</option>
-                                {savedMappings.map((m) => (
-                                    <option key={m.name} value={m.name}>
-                                        {m.name}
-                                    </option>
-                                ))}
-                            </select>
-                        )}
-                    </div>
-                )}
+                            {message.text}
+                        </div>
+                    )}
 
-                {showMapping && csvHeaders.length > 0 && (
-                    <div className="mb-6 rounded-lg border border-zinc-700 bg-zinc-800/30 p-4">
-                        <div className="mb-4 flex items-center justify-between">
-                            <h3 className="text-sm font-medium text-zinc-300">Column Mapping</h3>
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={mappingName}
-                                    onChange={(e) => setMappingName(e.target.value)}
-                                    placeholder="Mapping name"
-                                    className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-100 placeholder-zinc-500"
-                                />
-                                <button
-                                    onClick={saveMapping}
-                                    disabled={!mappingName.trim()}
-                                    className="rounded-lg bg-purple-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                    {csvHeaders.length > 0 && (
+                        <div className="mb-4 flex items-center gap-4">
+                            <button
+                                onClick={() => setShowMapping(!showMapping)}
+                                className="text-sm text-cardinal-700 hover:text-cardinal-800"
+                            >
+                                {showMapping ? "Hide" : "Show"} Column Mapping
+                            </button>
+                            {savedMappings.length > 0 && (
+                                <select
+                                    onChange={(e) => {
+                                        const saved = savedMappings.find((m) => m.name === e.target.value);
+                                        if (saved) loadMapping(saved);
+                                    }}
+                                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700"
+                                    defaultValue=""
                                 >
-                                    Save
-                                </button>
+                                    <option value="">Load saved mapping...</option>
+                                    {savedMappings.map((m) => (
+                                        <option key={m.name} value={m.name}>
+                                            {m.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
+                    )}
+
+                    {showMapping && csvHeaders.length > 0 && (
+                        <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                            <div className="mb-4 flex items-center justify-between">
+                                <h3 className="text-sm font-medium text-gray-700">Column Mapping</h3>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={mappingName}
+                                        onChange={(e) => setMappingName(e.target.value)}
+                                        placeholder="Mapping name"
+                                        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 placeholder-gray-400"
+                                    />
+                                    <button
+                                        onClick={saveMapping}
+                                        disabled={!mappingName.trim()}
+                                        className="rounded-lg bg-cardinal-800 px-3 py-1.5 text-sm text-white disabled:opacity-50 hover:bg-cardinal-700"
+                                    >
+                                        Save
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
+                                {DB_FIELDS.map((field) => (
+                                    <div key={field.key} className="flex items-center gap-2">
+                                        <label className="w-28 text-sm text-gray-500">
+                                            {field.label}
+                                            {field.required && <span className="text-red-500">*</span>}
+                                        </label>
+                                        <select
+                                            value={mapping[field.key] || ""}
+                                            onChange={(e) => handleMappingChange(field.key, e.target.value)}
+                                            className="flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-700"
+                                        >
+                                            <option value="">-- Not mapped --</option>
+                                            {csvHeaders.map((header) => (
+                                                <option key={header} value={header}>
+                                                    {header}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                ))}
+                            </div>
+                            <button
+                                onClick={applyMapping}
+                                className="mt-4 rounded-lg bg-cardinal-800 px-4 py-2 text-sm font-medium text-white hover:bg-cardinal-700"
+                            >
+                                Apply Mapping
+                            </button>
+                        </div>
+                    )}
+
+                    {preview.length > 0 && (
+                        <div className="mb-6">
+                            <h3 className="mb-2 text-sm font-medium text-gray-700">Preview (first 5 rows)</h3>
+                            <div className="overflow-x-auto rounded-lg border border-gray-200">
+                                <table className="min-w-full text-sm">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-400">Bib</th>
+                                            <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-400">Name</th>
+                                            <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-400">Team</th>
+                                            <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-400">Division</th>
+                                            <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-400">Chip Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {preview.map((row, i) => (
+                                            <tr key={i}>
+                                                <td className="px-3 py-2 text-gray-600">{row.bib}</td>
+                                                <td className="px-3 py-2 text-gray-800 font-medium">{row.name}</td>
+                                                <td className="px-3 py-2 text-gray-500">{row.team}</td>
+                                                <td className="px-3 py-2 text-gray-500">{row.division || "Collegiate"}</td>
+                                                <td className="px-3 py-2 text-gray-600">{row.time_chip}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
-                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
-                            {DB_FIELDS.map((field) => (
-                                <div key={field.key} className="flex items-center gap-2">
-                                    <label className="w-28 text-sm text-zinc-400">
-                                        {field.label}
-                                        {field.required && <span className="text-red-400">*</span>}
-                                    </label>
+                    )}
+
+                    {preview.length > 0 && (
+                        <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                            <h3 className="mb-4 text-sm font-semibold text-gray-700">Race Details</h3>
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-gray-500">Race Name</label>
+                                    <input
+                                        type="text"
+                                        value={raceInfo.race_name}
+                                        onChange={(e) => setRaceInfo({ ...raceInfo, race_name: e.target.value })}
+                                        placeholder="e.g., Aggieathlon 2025"
+                                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:border-cardinal-400 focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-gray-500">Race Type</label>
                                     <select
-                                        value={mapping[field.key] || ""}
-                                        onChange={(e) => handleMappingChange(field.key, e.target.value)}
-                                        className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-zinc-100"
+                                        value={raceInfo.race_type}
+                                        onChange={(e) => setRaceInfo({ ...raceInfo, race_type: e.target.value })}
+                                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none"
                                     >
-                                        <option value="">-- Not mapped --</option>
-                                        {csvHeaders.map((header) => (
-                                            <option key={header} value={header}>
-                                                {header}
-                                            </option>
-                                        ))}
+                                        <option value="Sprint">Sprint</option>
+                                        <option value="Olympic">Olympic</option>
+                                        <option value="Half">Half Ironman</option>
+                                        <option value="Full">Full Ironman</option>
                                     </select>
                                 </div>
-                            ))}
-                        </div>
-                        <button
-                            onClick={applyMapping}
-                            className="mt-4 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white"
-                        >
-                            Apply Mapping
-                        </button>
-                    </div>
-                )}
-
-                {preview.length > 0 && (
-                    <div className="mb-6">
-                        <h3 className="mb-2 text-sm font-medium text-zinc-300">Preview (first 5 rows)</h3>
-                        <div className="overflow-x-auto rounded-lg border border-zinc-700">
-                            <table className="min-w-full text-sm">
-                                <thead className="bg-zinc-800">
-                                    <tr>
-                                        <th className="px-3 py-2 text-left text-zinc-400">Bib</th>
-                                        <th className="px-3 py-2 text-left text-zinc-400">Name</th>
-                                        <th className="px-3 py-2 text-left text-zinc-400">Team</th>
-                                        <th className="px-3 py-2 text-left text-zinc-400">Division</th>
-                                        <th className="px-3 py-2 text-left text-zinc-400">Chip Time</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-zinc-700">
-                                    {preview.map((row, i) => (
-                                        <tr key={i}>
-                                            <td className="px-3 py-2 text-zinc-300">{row.bib}</td>
-                                            <td className="px-3 py-2 text-zinc-300">{row.name}</td>
-                                            <td className="px-3 py-2 text-zinc-300">{row.team}</td>
-                                            <td className="px-3 py-2 text-zinc-300">{row.division || "Collegiate"}</td>
-                                            <td className="px-3 py-2 text-zinc-300">{row.time_chip}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
-
-                {preview.length > 0 && (
-                    <div className="mb-6 rounded-lg border border-zinc-700 bg-zinc-800/30 p-4">
-                        <h3 className="mb-4 text-sm font-medium text-zinc-300">Race Details</h3>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            <div>
-                                <label className="mb-1 block text-xs text-zinc-400">Race Name</label>
-                                <input
-                                    type="text"
-                                    value={raceInfo.race_name}
-                                    onChange={(e) => setRaceInfo({ ...raceInfo, race_name: e.target.value })}
-                                    placeholder="e.g., Aggieathlon 2025"
-                                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-purple-500 focus:outline-none"
-                                />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs text-zinc-400">Race Type</label>
-                                <select
-                                    value={raceInfo.race_type}
-                                    onChange={(e) => setRaceInfo({ ...raceInfo, race_type: e.target.value })}
-                                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-purple-500 focus:outline-none"
-                                >
-                                    <option value="Sprint">Sprint</option>
-                                    <option value="Olympic">Olympic</option>
-                                    <option value="Half">Half Ironman</option>
-                                    <option value="Full">Full Ironman</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs text-zinc-400">Race Date</label>
-                                <input
-                                    type="date"
-                                    value={raceInfo.race_date}
-                                    onChange={(e) => setRaceInfo({ ...raceInfo, race_date: e.target.value })}
-                                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-purple-500 focus:outline-none"
-                                />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs text-zinc-400">Swim (meters)</label>
-                                <input
-                                    type="number"
-                                    value={raceInfo.meters_swim}
-                                    onChange={(e) => setRaceInfo({ ...raceInfo, meters_swim: parseInt(e.target.value) || 0 })}
-                                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-purple-500 focus:outline-none"
-                                />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs text-zinc-400">Bike (km)</label>
-                                <input
-                                    type="number"
-                                    value={raceInfo.meters_bike}
-                                    onChange={(e) => setRaceInfo({ ...raceInfo, meters_bike: parseInt(e.target.value) || 0 })}
-                                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-purple-500 focus:outline-none"
-                                />
-                            </div>
-                            <div>
-                                <label className="mb-1 block text-xs text-zinc-400">Run (km)</label>
-                                <input
-                                    type="number"
-                                    value={raceInfo.meters_run}
-                                    onChange={(e) => setRaceInfo({ ...raceInfo, meters_run: parseInt(e.target.value) || 0 })}
-                                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-purple-500 focus:outline-none"
-                                />
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-gray-500">Race Date</label>
+                                    <input
+                                        type="date"
+                                        value={raceInfo.race_date}
+                                        onChange={(e) => setRaceInfo({ ...raceInfo, race_date: e.target.value })}
+                                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-gray-500">Swim (meters)</label>
+                                    <input
+                                        type="number"
+                                        value={raceInfo.meters_swim}
+                                        onChange={(e) => setRaceInfo({ ...raceInfo, meters_swim: parseInt(e.target.value) || 0 })}
+                                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-gray-500">Bike (km)</label>
+                                    <input
+                                        type="number"
+                                        value={raceInfo.meters_bike}
+                                        onChange={(e) => setRaceInfo({ ...raceInfo, meters_bike: parseInt(e.target.value) || 0 })}
+                                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-1 block text-xs font-medium text-gray-500">Run (km)</label>
+                                    <input
+                                        type="number"
+                                        value={raceInfo.meters_run}
+                                        onChange={(e) => setRaceInfo({ ...raceInfo, meters_run: parseInt(e.target.value) || 0 })}
+                                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none"
+                                    />
+                                </div>
                             </div>
                         </div>
+                    )}
+
+                    <button
+                        onClick={handleUpload}
+                        disabled={!file || !raceInfo.race_name || uploading}
+                        className="rounded-lg bg-gradient-to-r from-cardinal-800 to-cardinal-900 px-6 py-2.5 font-medium text-white transition-all hover:from-cardinal-700 hover:to-cardinal-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {uploading ? "Uploading..." : "Upload Results"}
+                    </button>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                    <h2 className="mb-4 text-lg font-semibold text-gray-700">Debug Info</h2>
+                    <div className="space-y-2 text-sm text-gray-500">
+                        <p>User: {user?.email || "Not logged in"}</p>
+                        <p>Is Admin: {isAdmin ? "Yes" : "No"}</p>
+                        <p>User ID: {user?.id || "N/A"}</p>
                     </div>
-                )}
-
-                <button
-                    onClick={handleUpload}
-                    disabled={!file || !raceInfo.race_name || uploading}
-                    className="rounded-lg bg-gradient-to-r from-purple-600 to-maroon-600 px-6 py-2.5 font-medium text-white transition-all hover:from-purple-500 hover:to-maroon-500 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                    {uploading ? "Uploading..." : "Upload Results"}
-                </button>
-            </div>
-
-            <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 backdrop-blur-sm">
-                <h2 className="mb-4 text-lg font-semibold text-zinc-100">Debug Info</h2>
-                <div className="space-y-2 text-sm text-zinc-400">
-                    <p>User: {user?.email || "Not logged in"}</p>
-                    <p>Is Admin: {isAdmin ? "Yes" : "No"}</p>
-                    <p>User ID: {user?.id || "N/A"}</p>
                 </div>
             </div>
         </div>
@@ -585,17 +580,4 @@ function parseAge(value: string | undefined): number | null {
     if (!value || value === "N/A") return null;
     const parsed = parseInt(value, 10);
     return isNaN(parsed) ? null : parsed;
-}
-
-function parseInterval(value: string): string | null {
-    if (!value || value === "" || value === "N/A") return null;
-
-    const match = value.match(/^(\d+):(\d{2}):?(\d{2})?$/);
-    if (!match) return null;
-
-    const hours = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-    const seconds = match[3] ? parseInt(match[3], 10) : 0;
-
-    return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 }

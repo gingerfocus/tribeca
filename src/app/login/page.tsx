@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth/AuthContext";
@@ -12,8 +12,13 @@ export default function LoginPage() {
     const { signIn, user } = useAuth();
     const router = useRouter();
 
+    useEffect(() => {
+        if (user) {
+            router.push("/admin");
+        }
+    }, [user, router]);
+
     if (user) {
-        router.push("/admin");
         return null;
     }
 
@@ -34,10 +39,10 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 p-4">
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
             <div className="w-full max-w-md">
                 <div className="mb-8 flex items-center justify-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-maroon-600 to-purple-600">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-cardinal-800 shadow-md">
                         <svg
                             className="h-6 w-6 text-white"
                             fill="none"
@@ -52,13 +57,13 @@ export default function LoginPage() {
                             />
                         </svg>
                     </div>
-                    <h1 className="bg-gradient-to-r from-maroon-400 to-purple-400 bg-clip-text text-3xl font-bold text-transparent">
+                    <h1 className="text-3xl font-bold text-cardinal-900">
                         Tribeca Admin
                     </h1>
                 </div>
 
-                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-8 backdrop-blur-sm">
-                    <h2 className="mb-6 text-center text-xl font-semibold text-zinc-100">
+                <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
+                    <h2 className="mb-6 text-center text-xl font-semibold text-gray-700">
                         Sign in to continue
                     </h2>
 
@@ -66,7 +71,7 @@ export default function LoginPage() {
                         <div className="mb-6">
                             <label
                                 htmlFor="password"
-                                className="mb-2 block text-sm font-medium text-zinc-400"
+                                className="mb-2 block text-sm font-medium text-gray-500"
                             >
                                 Password
                             </label>
@@ -75,14 +80,14 @@ export default function LoginPage() {
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full rounded-lg border border-zinc-600 bg-zinc-800 px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+                                className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-gray-700 placeholder-gray-400 focus:border-cardinal-400 focus:outline-none focus:ring-2 focus:ring-cardinal-400/30"
                                 placeholder="Enter admin password"
                                 required
                             />
                         </div>
 
                         {error && (
-                            <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
+                            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
                                 {error}
                             </div>
                         )}
@@ -90,7 +95,7 @@ export default function LoginPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full rounded-lg bg-gradient-to-r from-maroon-600 to-purple-600 px-4 py-3 font-medium text-white transition-all hover:from-maroon-500 hover:to-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="w-full rounded-lg bg-cardinal-800 px-4 py-3 font-medium text-white transition-all hover:bg-cardinal-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {loading ? "Signing in..." : "Sign In"}
                         </button>
@@ -100,7 +105,7 @@ export default function LoginPage() {
                 <div className="mt-6 text-center">
                     <Link
                         href="/"
-                        className="text-sm text-zinc-500 hover:text-purple-400 transition-colors"
+                        className="text-sm text-gray-500 hover:text-cardinal-700 transition-colors"
                     >
                         ← Back to Race Results
                     </Link>
