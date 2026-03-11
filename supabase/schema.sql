@@ -28,19 +28,13 @@ CREATE TABLE results (
   athlete_age       INT,
 
   time_swim INTERVAL,
-  rank_swim INT,
   time_t1   INTERVAL,
-  rank_t1   INT,
   time_bike INTERVAL,
-  rank_bike INT,
   time_t2   INTERVAL,
-  rank_t2   INT,
   time_run  INTERVAL,
-  rank_run  INT,
 
   time_chip INTERVAL,          -- If null then DNF
-  rank_chip INT,
 
-  UNIQUE(race_id, bib)         -- composite key 
+  UNIQUE(race_id, athlete_bib)
 );
 
