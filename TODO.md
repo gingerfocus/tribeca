@@ -5,18 +5,18 @@ someone else and move on with my life. Right now I am building features but
 soon(tm) I need to think about the future.
 
 ## Ui
-- [ ] Light Theme
-- [ ] Color Scheme
+- [X] Light Theme
+  - [ ] Light Theme for admin Page
+- [X] Color Scheme
 - [ ] Home Page
 - [ ] Race Pages
 
 ## Filtering
-- [ ] Draft Legal & Age Group
-  - [ ] Get ride of age collumn
+- [X] Draft Legal & Age Group
 
 ## Upload
 - [ ] Identify Errors
-- [ ] Collumn Renaming
+- [x] Collumn Renaming
 - [ ] Reformat Text
 - [ ] Identify Missing Names
 

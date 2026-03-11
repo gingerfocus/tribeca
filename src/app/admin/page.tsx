@@ -200,13 +200,8 @@ export default function AdminPage() {
     };
 
     const handleUpload = async () => {
-        if (!file || !supabase) {
-            setMessage({ type: "error", text: "No file selected or Supabase not configured" });
-            return;
-        }
-
-        if (!raceInfo.race_name) {
-            setMessage({ type: "error", text: "Please enter race name" });
+        if (!file || !raceInfo.race_name) {
+            setMessage({ type: "error", text: "Please select a file and enter race name" });
             return;
         }
 
@@ -216,87 +211,25 @@ export default function AdminPage() {
         try {
             const reader = new FileReader();
             reader.onload = async (event) => {
-                if (!supabase) return;
-
                 const text = event.target?.result as string;
-                const rows = parseCSVWithMapping(text, mapping);
 
-                const { data: race, error: raceError } = await supabase
-                    .from("races")
-                    .insert({
-                        race_name: raceInfo.race_name,
-                        race_type: raceInfo.race_type,
-                        race_date: raceInfo.race_date,
-                        meters_swim: raceInfo.meters_swim,
-                        meters_bike: raceInfo.meters_bike,
-                        meters_run: raceInfo.meters_run,
-                    })
-                    .select()
-                    .single();
+                const response = await fetch("/api/upload", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        raceInfo,
+                        mapping,
+                        csvData: text,
+                    }),
+                });
 
-                if (raceError) throw raceError;
+                const result = await response.json();
 
-                const athleteMap = new Map<string, number>();
-                const athleteInserts: { name: string; team: string | null; city: string | null; gender: string | null }[] = [];
-
-                for (const row of rows) {
-                    const athleteKey = `${row.name.toLowerCase()}-${(row.team || "").toLowerCase()}`;
-                    if (!athleteMap.has(athleteKey)) {
-                        athleteInserts.push({
-                            name: row.name,
-                            team: row.team || null,
-                            city: row.city || null,
-                            gender: row.gender || null,
-                        });
-                        athleteMap.set(athleteKey, -1);
-                    }
+                if (!response.ok) {
+                    throw new Error(result.error || "Upload failed");
                 }
 
-                if (athleteInserts.length > 0) {
-                    const { data: athletes, error: athleteError } = await supabase
-                        .from("athletes")
-                        .upsert(athleteInserts, { onConflict: "name" })
-                        .select();
-
-                    if (athleteError) throw athleteError;
-
-                    for (let i = 0; i < athletes.length; i++) {
-                        const athleteKey = `${athleteInserts[i].name.toLowerCase()}-${(athleteInserts[i].team || "").toLowerCase()}`;
-                        athleteMap.set(athleteKey, athletes[i].id);
-                    }
-                }
-
-                const resultInserts = rows
-                    .filter((row) => row.name && row.bib)
-                    .map((row) => {
-                        const athleteKey = `${row.name.toLowerCase()}-${(row.team || "").toLowerCase()}`;
-                        const athleteId = athleteMap.get(athleteKey);
-
-                        return {
-                            race_id: race.id,
-                            athlete_id: athleteId,
-                            athlete_bib: row.bib,
-                            athlete_division: row.division || "Collegiate",
-                            athlete_age: row.age,
-                            time_swim: parseInterval(row.time_swim),
-                            time_t1: parseInterval(row.time_t1),
-                            time_bike: parseInterval(row.time_bike),
-                            time_t2: parseInterval(row.time_t2),
-                            time_run: parseInterval(row.time_run),
-                            time_chip: parseInterval(row.time_chip),
-                        };
-                    })
-                    .filter((r) => r.athlete_id);
-
-                if (resultInserts.length > 0) {
-                    const { error: insertError } = await supabase
-                        .from("results")
-                        .upsert(resultInserts, { onConflict: "race_id,athlete_bib" });
-
-                    if (insertError) throw insertError;
-                }
-
-                setMessage({ type: "success", text: `Successfully uploaded ${resultInserts.length} results for race "${raceInfo.race_name}"` });
+                setMessage({ type: "success", text: result.message });
                 setFile(null);
                 setPreview([]);
                 setCsvHeaders([]);

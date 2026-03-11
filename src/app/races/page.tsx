@@ -82,6 +82,7 @@ export default function RacesPage() {
     const [selectedRace, setSelectedRace]     = useState<string>("All");
     const [scOnly, setScOnly]                 = useState(false);
     const [genderFilter, setGenderFilter]     = useState("All");
+    const [divisionFilter, setDivisionFilter] = useState("All");
     const [ageGroupFilter, setAgeGroupFilter] = useState("All");
     const [teamFilter, setTeamFilter]         = useState("All");
     const [sortKey, setSortKey]               = useState<keyof DisplayRow>("chip_ms");
@@ -98,10 +99,10 @@ export default function RacesPage() {
         supabase
             .from("results")
             .select(`
-                result_id, bib, age_at_race,
-                swim, t1, bike, t2, run, chip_elapsed, overall_rank,
+                result_id, athlete_bib, athlete_age, athlete_division,
+                time_swim, time_t1, time_bike, time_t2, time_run, time_chip,
                 athletes ( id, name, team, city, gender ),
-                races    ( id, name, date, type, location )
+                races ( id, race_name, race_date, race_type, race_location, meters_swim, meters_bike, meters_run )
             `)
             .then(({ data, error: e }) => {
                 if (e) { setError(e.message); setLoading(false); return; }
@@ -132,9 +133,33 @@ export default function RacesPage() {
         [allResults, selectedRace],
     );
 
+    const selectedRaceInfo = useMemo(() => {
+        if (selectedRace === "All") {
+            const firstWithDist = allResults.find(r => r.race_swim_km);
+            if (firstWithDist) {
+                return {
+                    name: "All Races",
+                    type: firstWithDist.race_type || "Sprint",
+                    swim: firstWithDist.race_swim_km,
+                    bike: firstWithDist.race_bike_km,
+                    run: firstWithDist.race_run_km,
+                };
+            }
+            return { name: "All Races", type: "Sprint", swim: 0.4, bike: 20, run: 5 };
+        }
+        const raceData = allResults.find(r => r.race_name === selectedRace);
+        return {
+            name: selectedRace,
+            type: raceData?.race_type || "Sprint",
+            swim: raceData?.race_swim_km || 0.4,
+            bike: raceData?.race_bike_km || 20,
+            run: raceData?.race_run_km || 5,
+        };
+    }, [allResults, selectedRace]);
+
     useEffect(() => {
-        setScOnly(false); setGenderFilter("All"); setAgeGroupFilter("All");
-        setTeamFilter("All"); setSelectedResult(null); setPage(0);
+        setScOnly(false); setGenderFilter("All"); setDivisionFilter("All");
+        setAgeGroupFilter("All"); setTeamFilter("All"); setSelectedResult(null); setPage(0);
     }, [selectedRace]);
 
     const uniqueTeams = useMemo(() => {
@@ -147,10 +172,16 @@ export default function RacesPage() {
         return ["All", ...ags];
     }, [raceResults]);
 
+    const uniqueDivisions = useMemo(() => {
+        const divs = [...new Set(raceResults.map((r) => r.division).filter(Boolean) as string[])].sort();
+        return ["All", ...divs];
+    }, [raceResults]);
+
     const filteredSorted = useMemo(() => {
         const rows = raceResults.filter((r) => {
             if (scOnly && !isSantaClara(r.team)) return false;
             if (genderFilter !== "All" && r.gender !== genderFilter) return false;
+            if (divisionFilter !== "All" && r.division !== divisionFilter) return false;
             if (ageGroupFilter !== "All" && r.age_group !== ageGroupFilter) return false;
             if (teamFilter !== "All" && r.team !== teamFilter) return false;
             return true;
@@ -163,7 +194,7 @@ export default function RacesPage() {
             const cmp = av < bv ? -1 : av > bv ? 1 : 0;
             return sortDir === "asc" ? cmp : -cmp;
         });
-    }, [raceResults, scOnly, genderFilter, ageGroupFilter, teamFilter, sortKey, sortDir]);
+    }, [raceResults, scOnly, genderFilter, divisionFilter, ageGroupFilter, teamFilter, sortKey, sortDir]);
 
     useEffect(() => { setPage(0); }, [scOnly, genderFilter, ageGroupFilter, teamFilter, sortKey, sortDir]);
 
@@ -232,7 +263,9 @@ export default function RacesPage() {
                         </div>
                         <div>
                             <h1 className="text-3xl font-bold text-cardinal-900">Race Results</h1>
-                            <p className="text-sm text-gray-400">Sprint Triathlon · 0.4 km swim / 20 km bike / 5 km run</p>
+                            <p className="text-sm text-gray-400">
+                                {selectedRaceInfo.type} Triathlon · {selectedRaceInfo.swim} km swim / {selectedRaceInfo.bike} km bike / {selectedRaceInfo.run} km run
+                            </p>
                         </div>
                     </div>
                     <Link
@@ -336,6 +369,14 @@ export default function RacesPage() {
                         </div>
 
                         <div className="flex items-center gap-2">
+                            <label className="text-xs font-medium text-gray-400">Division</label>
+                            <select value={divisionFilter} onChange={(e) => setDivisionFilter(e.target.value)}
+                                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none">
+                                {uniqueDivisions.map((d) => <option key={d} value={d}>{d}</option>)}
+                            </select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
                             <label className="text-xs font-medium text-gray-400">Team</label>
                             <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)}
                                 className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none">
@@ -347,8 +388,8 @@ export default function RacesPage() {
                             <span className="font-semibold text-gray-700">{filteredSorted.length}</span> result{filteredSorted.length !== 1 ? "s" : ""}
                         </span>
 
-                        {(scOnly || genderFilter !== "All" || ageGroupFilter !== "All" || teamFilter !== "All") && (
-                            <button onClick={() => { setScOnly(false); setGenderFilter("All"); setAgeGroupFilter("All"); setTeamFilter("All"); }}
+                        {(scOnly || genderFilter !== "All" || divisionFilter !== "All" || ageGroupFilter !== "All" || teamFilter !== "All") && (
+                            <button onClick={() => { setScOnly(false); setGenderFilter("All"); setDivisionFilter("All"); setAgeGroupFilter("All"); setTeamFilter("All"); }}
                                 className="text-xs text-gray-400 underline underline-offset-2 hover:text-gray-600">
                                 Clear filters
                             </button>
@@ -384,6 +425,7 @@ export default function RacesPage() {
                                     <th className="w-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">#</th>
                                     <Th col="bib">Bib</Th>
                                     <Th col="name">Athlete</Th>
+                                    <Th col="division">Division</Th>
                                     <Th col="team">Team</Th>
                                     <Th col="gender">Sex</Th>
                                     <Th col="age_group">Age</Th>
@@ -400,7 +442,7 @@ export default function RacesPage() {
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {displayedRows.length === 0 ? (
-                                    <tr><td colSpan={15} className="px-6 py-16 text-center text-gray-400">No results match the current filters</td></tr>
+                                    <tr><td colSpan={16} className="px-6 py-16 text-center text-gray-400">No results match the current filters</td></tr>
                                 ) : (
                                     displayedRows.map(({ result: r, rank }) => {
                                         const isSC       = isSantaClara(r.team);
@@ -416,6 +458,7 @@ export default function RacesPage() {
                                                 <td className="px-3 py-2.5 text-xs text-gray-300">{rank}</td>
                                                 <td className="px-3 py-2.5 font-mono text-gray-400">{r.bib}</td>
                                                 <td className="px-3 py-2.5 font-medium text-gray-800 whitespace-nowrap">{r.name}</td>
+                                                <td className="px-3 py-2.5 text-gray-500">{r.division}</td>
                                                 <td className="px-3 py-2.5">
                                                     {r.team ? (
                                                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -428,13 +471,13 @@ export default function RacesPage() {
                                                 <td className="px-3 py-2.5 text-gray-500">{r.age_group ?? <span className="text-gray-200">—</span>}</td>
                                                 <td className="px-3 py-2.5 font-mono font-semibold text-cardinal-700">{formatTime(r.chip_ms)}</td>
                                                 <td className="px-3 py-2.5 font-mono text-gray-600">{r.swim_ms ? formatTime(r.swim_ms) : <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 text-xs text-gray-400">{swimPaceStr(r.swim_ms)}</td>
+                                                <td className="px-3 py-2.5 text-xs text-gray-400">{swimPaceStr(r.swim_ms, r.race_swim_km)}</td>
                                                 <td className="px-3 py-2.5 font-mono text-gray-400">{r.t1_ms ? formatTime(r.t1_ms) : <span className="text-gray-200">—</span>}</td>
                                                 <td className="px-3 py-2.5 font-mono text-gray-600">{r.bike_ms ? formatTime(r.bike_ms) : <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 text-xs text-gray-400">{bikePaceStr(r.bike_ms)}</td>
+                                                <td className="px-3 py-2.5 text-xs text-gray-400">{bikePaceStr(r.bike_ms, r.race_bike_km)}</td>
                                                 <td className="px-3 py-2.5 font-mono text-gray-400">{r.t2_ms ? formatTime(r.t2_ms) : <span className="text-gray-200">—</span>}</td>
                                                 <td className="px-3 py-2.5 font-mono text-gray-600">{r.run_ms ? formatTime(r.run_ms) : <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 text-xs text-gray-400">{runPaceStr(r.run_ms)}</td>
+                                                <td className="px-3 py-2.5 text-xs text-gray-400">{runPaceStr(r.run_ms, r.race_run_km)}</td>
                                             </tr>
                                         );
                                     })

@@ -47,10 +47,10 @@ export default function Dashboard() {
         supabase
             .from("results")
             .select(`
-                result_id, bib, age_at_race,
-                swim, t1, bike, t2, run, chip_elapsed, overall_rank,
+                result_id, athlete_bib, athlete_age, athlete_division,
+                time_swim, time_t1, time_bike, time_t2, time_run, time_chip,
                 athletes ( id, name, team, city, gender ),
-                races    ( id, name, date, type, location )
+                races ( id, race_name, race_date, race_type, race_location, meters_swim, meters_bike, meters_run )
             `)
             .then(({ data, error: e }) => {
                 if (e) { setError(e.message); setLoading(false); return; }
