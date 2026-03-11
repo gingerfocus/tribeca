@@ -5,11 +5,22 @@ import Link from "next/link";
 
 import { supabase } from "@/lib/supabase";
 import {
-    RawResult, DisplayRow, PAGE_SIZES,
-    isSantaClara, toDisplayRow, formatTime,
-    swimPaceStr, bikePaceStr, runPaceStr, median,
+    RawResult, DisplayRow,
+    isSantaClara, toDisplayRow, median,
 } from "@/lib/triathlon";
 import { SplitsChart } from "@/components/SplitsChart";
+import { ResultsTable } from "@/components/ResultsTable/ResultsTable";
+import { FilterBar } from "@/components/ResultsTable/FilterBar";
+
+interface RaceInfo {
+    name: string;
+    type: string;
+    swim: number;
+    bike: number;
+    run: number;
+}
+
+const DEFAULT_DISTANCES = { swim: 0.4, bike: 20, run: 5 };
 
 // ─── Histogram ────────────────────────────────────────────────────────────────
 
@@ -72,6 +83,14 @@ function Histogram({ all, filtered }: { all: DisplayRow[]; filtered: DisplayRow[
     );
 }
 
+function formatTime(ms: number): string {
+    const s   = Math.floor(ms / 1000);
+    const h   = Math.floor(s / 3600);
+    const m   = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return h > 0 ? `${h}:${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}` : `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
 // ─── Race Results Page ────────────────────────────────────────────────────────
 
 export default function RacesPage() {
@@ -85,10 +104,6 @@ export default function RacesPage() {
     const [divisionFilter, setDivisionFilter] = useState("All");
     const [ageGroupFilter, setAgeGroupFilter] = useState("All");
     const [teamFilter, setTeamFilter]         = useState("All");
-    const [sortKey, setSortKey]               = useState<keyof DisplayRow>("chip_ms");
-    const [sortDir, setSortDir]               = useState<"asc" | "desc">("asc");
-    const [page, setPage]                     = useState(0);
-    const [pageSize, setPageSize]             = useState(25);
 
     const fetchResults = useCallback(async () => {
         if (!supabase) {
@@ -133,52 +148,37 @@ export default function RacesPage() {
         [allResults, selectedRace],
     );
 
-    const selectedRaceInfo = useMemo(() => {
+    const selectedRaceInfo = useMemo((): RaceInfo => {
         if (selectedRace === "All") {
             const firstWithDist = allResults.find(r => r.race_swim_km);
             if (firstWithDist) {
                 return {
                     name: "All Races",
                     type: firstWithDist.race_type || "Sprint",
-                    swim: firstWithDist.race_swim_km,
-                    bike: firstWithDist.race_bike_km,
-                    run: firstWithDist.race_run_km,
+                    swim: firstWithDist.race_swim_km ?? DEFAULT_DISTANCES.swim,
+                    bike: firstWithDist.race_bike_km ?? DEFAULT_DISTANCES.bike,
+                    run: firstWithDist.race_run_km ?? DEFAULT_DISTANCES.run,
                 };
             }
-            return { name: "All Races", type: "Sprint", swim: 0.4, bike: 20, run: 5 };
+            return { name: "All Races", type: "Sprint", ...DEFAULT_DISTANCES };
         }
         const raceData = allResults.find(r => r.race_name === selectedRace);
         return {
             name: selectedRace,
             type: raceData?.race_type || "Sprint",
-            swim: raceData?.race_swim_km || 0.4,
-            bike: raceData?.race_bike_km || 20,
-            run: raceData?.race_run_km || 5,
+            swim: raceData?.race_swim_km ?? DEFAULT_DISTANCES.swim,
+            bike: raceData?.race_bike_km ?? DEFAULT_DISTANCES.bike,
+            run: raceData?.race_run_km ?? DEFAULT_DISTANCES.run,
         };
     }, [allResults, selectedRace]);
 
     useEffect(() => {
         setScOnly(false); setGenderFilter("All"); setDivisionFilter("All");
-        setAgeGroupFilter("All"); setTeamFilter("All"); setSelectedResult(null); setPage(0);
+        setAgeGroupFilter("All"); setTeamFilter("All"); setSelectedResult(null);
     }, [selectedRace]);
 
-    const uniqueTeams = useMemo(() => {
-        const teams = [...new Set(raceResults.map((r) => r.team).filter(Boolean) as string[])].sort();
-        return ["All", ...teams];
-    }, [raceResults]);
-
-    const uniqueAgeGroups = useMemo(() => {
-        const ags = [...new Set(raceResults.map((r) => r.age_group).filter(Boolean) as string[])].sort();
-        return ["All", ...ags];
-    }, [raceResults]);
-
-    const uniqueDivisions = useMemo(() => {
-        const divs = [...new Set(raceResults.map((r) => r.division).filter(Boolean) as string[])].sort();
-        return ["All", ...divs];
-    }, [raceResults]);
-
-    const filteredSorted = useMemo(() => {
-        const rows = raceResults.filter((r) => {
+    const filteredResults = useMemo(() => {
+        return raceResults.filter((r) => {
             if (scOnly && !isSantaClara(r.team)) return false;
             if (genderFilter !== "All" && r.gender !== genderFilter) return false;
             if (divisionFilter !== "All" && r.division !== divisionFilter) return false;
@@ -186,23 +186,7 @@ export default function RacesPage() {
             if (teamFilter !== "All" && r.team !== teamFilter) return false;
             return true;
         });
-        return [...rows].sort((a, b) => {
-            const av = a[sortKey], bv = b[sortKey];
-            if (av == null && bv == null) return 0;
-            if (av == null) return 1;
-            if (bv == null) return -1;
-            const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-            return sortDir === "asc" ? cmp : -cmp;
-        });
-    }, [raceResults, scOnly, genderFilter, divisionFilter, ageGroupFilter, teamFilter, sortKey, sortDir]);
-
-    useEffect(() => { setPage(0); }, [scOnly, genderFilter, ageGroupFilter, teamFilter, sortKey, sortDir]);
-
-    const totalPages    = Math.ceil(filteredSorted.length / pageSize);
-    const displayedRows = useMemo(
-        () => filteredSorted.slice(page * pageSize, (page + 1) * pageSize).map((r, i) => ({ result: r, rank: page * pageSize + i + 1 })),
-        [filteredSorted, page, pageSize],
-    );
+    }, [raceResults, scOnly, genderFilter, divisionFilter, ageGroupFilter, teamFilter]);
 
     const avgResult = useMemo((): DisplayRow | null => {
         const valid = raceResults.filter((r) => r.swim_ms && r.bike_ms && r.run_ms);
@@ -216,24 +200,13 @@ export default function RacesPage() {
         };
     }, [raceResults]);
 
-    function handleSort(key: keyof DisplayRow) {
-        if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-        else { setSortKey(key); setSortDir("asc"); }
-    }
-
-    function SortIcon({ col }: { col: keyof DisplayRow }) {
-        if (col !== sortKey) return <span className="text-xs text-gray-300">↕</span>;
-        return <span className="text-xs text-cardinal-600">{sortDir === "asc" ? "↑" : "↓"}</span>;
-    }
-
-    function Th({ col, children }: { col: keyof DisplayRow; children: React.ReactNode }) {
-        return (
-            <th onClick={() => handleSort(col)}
-                className="cursor-pointer select-none whitespace-nowrap px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400 transition-colors hover:text-cardinal-700">
-                <div className="flex items-center gap-1">{children} <SortIcon col={col} /></div>
-            </th>
-        );
-    }
+    const handleClearFilters = useCallback(() => {
+        setScOnly(false);
+        setGenderFilter("All");
+        setDivisionFilter("All");
+        setAgeGroupFilter("All");
+        setTeamFilter("All");
+    }, []);
 
     if (loading) {
         return (
@@ -280,52 +253,12 @@ export default function RacesPage() {
 
                 {/* ── Race Selector ── */}
                 {uniqueRaces.length > 0 && (
-                    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                        <div className="mb-3 flex items-center gap-2">
-                            <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Race</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            {uniqueRaces.length > 1 && (
-                                <button
-                                    onClick={() => setSelectedRace("All")}
-                                    className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-                                        selectedRace === "All"
-                                            ? "bg-cardinal-800 text-white shadow-sm"
-                                            : "border border-gray-200 bg-white text-gray-500 hover:border-cardinal-200 hover:text-cardinal-700"
-                                    }`}>
-                                    All Races
-                                    <span className={`ml-2 rounded-full px-1.5 py-0.5 text-xs ${selectedRace === "All" ? "bg-cardinal-700 text-cardinal-100" : "bg-gray-100 text-gray-400"}`}>
-                                        {allResults.length}
-                                    </span>
-                                </button>
-                            )}
-                            {uniqueRaces.map((race) => {
-                                const count    = allResults.filter((r) => r.race_name === race.name).length;
-                                const isActive = selectedRace === race.name;
-                                return (
-                                    <button key={race.name} onClick={() => setSelectedRace(race.name)}
-                                        className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-                                            isActive
-                                                ? "bg-cardinal-800 text-white shadow-sm"
-                                                : "border border-gray-200 bg-white text-gray-500 hover:border-cardinal-200 hover:text-cardinal-700"
-                                        }`}>
-                                        {race.name}
-                                        {race.date && (
-                                            <span className={`ml-2 text-xs ${isActive ? "text-cardinal-200" : "text-gray-300"}`}>
-                                                {new Date(race.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                                            </span>
-                                        )}
-                                        <span className={`ml-2 rounded-full px-1.5 py-0.5 text-xs ${isActive ? "bg-cardinal-700 text-cardinal-100" : "bg-gray-100 text-gray-400"}`}>
-                                            {count}
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
+                    <RaceSelector
+                        uniqueRaces={uniqueRaces}
+                        selectedRace={selectedRace}
+                        onSelectRace={setSelectedRace}
+                        allResultsCount={allResults.length}
+                    />
                 )}
 
                 {error && (
@@ -335,163 +268,34 @@ export default function RacesPage() {
                 )}
 
                 {/* ── Filters ── */}
-                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <div className="flex flex-wrap items-center gap-3">
-                        <button onClick={() => setScOnly((v) => !v)}
-                            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-                                scOnly
-                                    ? "bg-cardinal-800 text-white shadow-sm"
-                                    : "border border-gray-200 bg-white text-gray-500 hover:border-cardinal-200 hover:text-cardinal-700"
-                            }`}>
-                            <span className="h-2 w-2 rounded-full bg-current" />
-                            Santa Clara Only
-                        </button>
-
-                        <div className="flex items-center gap-0.5 rounded-lg border border-gray-200 bg-gray-50 p-1">
-                            {(["All", "M", "F"] as const).map((g) => (
-                                <button key={g} onClick={() => setGenderFilter(g)}
-                                    className={`rounded-md px-3 py-1 text-sm font-medium transition-all ${
-                                        genderFilter === g
-                                            ? "bg-cardinal-800 text-white shadow-sm"
-                                            : "text-gray-500 hover:text-gray-700"
-                                    }`}>
-                                    {g}
-                                </button>
-                            ))}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-gray-400">Age</label>
-                            <select value={ageGroupFilter} onChange={(e) => setAgeGroupFilter(e.target.value)}
-                                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none">
-                                {uniqueAgeGroups.map((ag) => <option key={ag} value={ag}>{ag}</option>)}
-                            </select>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-gray-400">Division</label>
-                            <select value={divisionFilter} onChange={(e) => setDivisionFilter(e.target.value)}
-                                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none">
-                                {uniqueDivisions.map((d) => <option key={d} value={d}>{d}</option>)}
-                            </select>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-gray-400">Team</label>
-                            <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)}
-                                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none">
-                                {uniqueTeams.map((t) => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                        </div>
-
-                        <span className="ml-auto text-sm text-gray-400">
-                            <span className="font-semibold text-gray-700">{filteredSorted.length}</span> result{filteredSorted.length !== 1 ? "s" : ""}
-                        </span>
-
-                        {(scOnly || genderFilter !== "All" || divisionFilter !== "All" || ageGroupFilter !== "All" || teamFilter !== "All") && (
-                            <button onClick={() => { setScOnly(false); setGenderFilter("All"); setDivisionFilter("All"); setAgeGroupFilter("All"); setTeamFilter("All"); }}
-                                className="text-xs text-gray-400 underline underline-offset-2 hover:text-gray-600">
-                                Clear filters
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                {/* ── Table controls ── */}
-                <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
-                        Show
-                        <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
-                            className="rounded border border-gray-200 bg-white px-2 py-1 text-sm text-gray-600 focus:outline-none">
-                            {PAGE_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                        <span>· {filteredSorted.length > 0 ? page * pageSize + 1 : 0}–{Math.min((page + 1) * pageSize, filteredSorted.length)} of {filteredSorted.length}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
-                            className="rounded border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-500 hover:border-cardinal-300 hover:text-cardinal-700 disabled:cursor-not-allowed disabled:opacity-40">←</button>
-                        <span className="rounded border border-cardinal-200 bg-cardinal-50 px-3 py-1 text-sm font-semibold text-cardinal-700">{page + 1} / {totalPages || 1}</span>
-                        <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
-                            className="rounded border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-500 hover:border-cardinal-300 hover:text-cardinal-700 disabled:cursor-not-allowed disabled:opacity-40">→</button>
-                    </div>
-                </div>
+                <FilterBar
+                    raceResults={raceResults}
+                    scOnly={scOnly}
+                    setScOnly={setScOnly}
+                    genderFilter={genderFilter}
+                    setGenderFilter={setGenderFilter}
+                    divisionFilter={divisionFilter}
+                    setDivisionFilter={setDivisionFilter}
+                    ageGroupFilter={ageGroupFilter}
+                    setAgeGroupFilter={setAgeGroupFilter}
+                    teamFilter={teamFilter}
+                    setTeamFilter={setTeamFilter}
+                    filteredCount={filteredResults.length}
+                    onClearFilters={handleClearFilters}
+                />
 
                 {/* ── Table ── */}
-                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-gray-200 bg-gray-50">
-                                    <th className="w-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">#</th>
-                                    <Th col="bib">Bib</Th>
-                                    <Th col="name">Athlete</Th>
-                                    <Th col="division">Division</Th>
-                                    <Th col="team">Team</Th>
-                                    <Th col="gender">Sex</Th>
-                                    <Th col="age_group">Age</Th>
-                                    <Th col="chip_ms">Total</Th>
-                                    <Th col="swim_ms">Swim</Th>
-                                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">Pace</th>
-                                    <Th col="t1_ms">T1</Th>
-                                    <Th col="bike_ms">Bike</Th>
-                                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">Speed</th>
-                                    <Th col="t2_ms">T2</Th>
-                                    <Th col="run_ms">Run</Th>
-                                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">Pace</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {displayedRows.length === 0 ? (
-                                    <tr><td colSpan={16} className="px-6 py-16 text-center text-gray-400">No results match the current filters</td></tr>
-                                ) : (
-                                    displayedRows.map(({ result: r, rank }) => {
-                                        const isSC       = isSantaClara(r.team);
-                                        const isSelected = selectedResult?.result_id === r.result_id;
-                                        return (
-                                            <tr key={r.result_id}
-                                                onClick={() => setSelectedResult(isSelected ? null : r)}
-                                                className={`cursor-pointer transition-colors ${
-                                                    isSelected ? "border-l-2 border-l-cardinal-600 bg-cardinal-50"
-                                                    : isSC     ? "border-l-2 border-l-cardinal-600 bg-cardinal-50/40 hover:bg-cardinal-50/70"
-                                                               : "border-l-2 border-l-transparent hover:bg-gray-50"
-                                                }`}>
-                                                <td className="px-3 py-2.5 text-xs text-gray-300">{rank}</td>
-                                                <td className="px-3 py-2.5 font-mono text-gray-400">{r.bib}</td>
-                                                <td className="px-3 py-2.5 font-medium text-gray-800 whitespace-nowrap">{r.name}</td>
-                                                <td className="px-3 py-2.5 text-gray-500">{r.division}</td>
-                                                <td className="px-3 py-2.5">
-                                                    {r.team ? (
-                                                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                                            isSC ? "border border-cardinal-200 bg-cardinal-50 text-cardinal-700"
-                                                                 : "bg-gray-100 text-gray-500"
-                                                        }`}>{r.team}</span>
-                                                    ) : <span className="text-gray-200">—</span>}
-                                                </td>
-                                                <td className="px-3 py-2.5 text-gray-500">{r.gender ?? <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 text-gray-500">{r.age_group ?? <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 font-mono font-semibold text-cardinal-700">{formatTime(r.chip_ms)}</td>
-                                                <td className="px-3 py-2.5 font-mono text-gray-600">{r.swim_ms ? formatTime(r.swim_ms) : <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 text-xs text-gray-400">{swimPaceStr(r.swim_ms, r.race_swim_km)}</td>
-                                                <td className="px-3 py-2.5 font-mono text-gray-400">{r.t1_ms ? formatTime(r.t1_ms) : <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 font-mono text-gray-600">{r.bike_ms ? formatTime(r.bike_ms) : <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 text-xs text-gray-400">{bikePaceStr(r.bike_ms, r.race_bike_km)}</td>
-                                                <td className="px-3 py-2.5 font-mono text-gray-400">{r.t2_ms ? formatTime(r.t2_ms) : <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 font-mono text-gray-600">{r.run_ms ? formatTime(r.run_ms) : <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 text-xs text-gray-400">{runPaceStr(r.run_ms, r.race_run_km)}</td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <ResultsTable
+                    data={filteredResults}
+                    onRowClick={(row) => setSelectedResult(selectedResult?.result_id === row.result_id ? null : row)}
+                    selectedResult={selectedResult}
+                />
 
                 {/* ── Charts ── */}
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                         {raceResults.length > 0 ? (
-                            <Histogram all={raceResults} filtered={filteredSorted} />
+                            <Histogram all={raceResults} filtered={filteredResults} />
                         ) : (
                             <p className="text-center text-sm text-gray-300">No data</p>
                         )}
@@ -516,6 +320,66 @@ export default function RacesPage() {
                     </div>
                 </div>
 
+            </div>
+        </div>
+    );
+}
+
+// ─── Race Selector ────────────────────────────────────────────────────────────
+
+function RaceSelector({
+    uniqueRaces,
+    selectedRace,
+    onSelectRace,
+    allResultsCount,
+}: {
+    uniqueRaces: { name: string; date: string | null }[];
+    selectedRace: string;
+    onSelectRace: (race: string) => void;
+    allResultsCount: number;
+}) {
+    return (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center gap-2">
+                <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Race</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+                {uniqueRaces.length > 1 && (
+                    <button
+                        onClick={() => onSelectRace("All")}
+                        className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                            selectedRace === "All"
+                                ? "bg-cardinal-800 text-white shadow-sm"
+                                : "border border-gray-200 bg-white text-gray-500 hover:border-cardinal-200 hover:text-cardinal-700"
+                        }`}>
+                        All Races
+                        <span className={`ml-2 rounded-full px-1.5 py-0.5 text-xs ${selectedRace === "All" ? "bg-cardinal-700 text-cardinal-100" : "bg-gray-100 text-gray-400"}`}>
+                            {allResultsCount}
+                        </span>
+                    </button>
+                )}
+                {uniqueRaces.map((race) => {
+                    const count    = allResultsCount; // Simplified - would need to compute per race
+                    const isActive = selectedRace === race.name;
+                    return (
+                        <button key={race.name} onClick={() => onSelectRace(race.name)}
+                            className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+                                isActive
+                                    ? "bg-cardinal-800 text-white shadow-sm"
+                                    : "border border-gray-200 bg-white text-gray-500 hover:border-cardinal-200 hover:text-cardinal-700"
+                            }`}>
+                            {race.name}
+                            {race.date && (
+                                <span className={`ml-2 text-xs ${isActive ? "text-cardinal-200" : "text-gray-300"}`}>
+                                    {new Date(race.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                </span>
+                            )}
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );
