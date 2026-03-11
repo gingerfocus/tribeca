@@ -1,168 +1,24 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
 
 import { supabase } from "@/lib/supabase";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface RawResult {
-    result_id: number;
-    bib: number;
-    age_at_race: number | null;
-    swim: string | null;
-    t1: string | null;
-    bike: string | null;
-    t2: string | null;
-    run: string | null;
-    chip_elapsed: string | null;
-    overall_rank: number | null;
-    athletes: {
-        id: number;
-        name: string;
-        team: string | null;
-        city: string | null;
-        gender: string | null;
-    };
-    races: {
-        id: number;
-        name: string;
-        date: string | null;
-        type: string | null;
-        location: string | null;
-    };
-}
-
-interface DisplayRow {
-    result_id: number;
-    bib: number;
-    name: string;
-    team: string | null;
-    gender: string | null;
-    age_at_race: number | null;
-    age_group: string | null;
-    race_name: string;
-    race_date: string | null;
-    chip_ms: number;
-    swim_ms: number | null;
-    t1_ms: number | null;
-    bike_ms: number | null;
-    t2_ms: number | null;
-    run_ms: number | null;
-    overall_rank: number | null;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const SANTA_CLARA_NAMES = new Set([
-    "SANTA CLARA",
-    "SANTA CLARA UNIVERSITY",
-    "SCU",
-]);
-
-function isSantaClara(team: string | null | undefined): boolean {
-    if (!team) return false;
-    return SANTA_CLARA_NAMES.has(team.trim().toUpperCase());
-}
-
-function intervalToMs(iv: string | null | undefined): number | null {
-    if (!iv) return null;
-    const parts = iv.split(":");
-    try {
-        if (parts.length === 3) {
-            const h = parseInt(parts[0]);
-            const m = parseInt(parts[1]);
-            const s = parseFloat(parts[2]);
-            return Math.round((h * 3600 + m * 60 + s) * 1000);
-        }
-    } catch { /* fall through */ }
-    return null;
-}
-
-function toDisplayRow(r: RawResult): DisplayRow | null {
-    const chip_ms = intervalToMs(r.chip_elapsed);
-    if (chip_ms === null) return null;
-    const g = r.athletes.gender ?? "";
-    const age = r.age_at_race;
-    let age_group: string | null = null;
-    if (age && g) {
-        if (age <= 19) age_group = `${g}18-19`;
-        else {
-            const lo = Math.floor(age / 5) * 5;
-            age_group = `${g}${lo}-${lo + 4}`;
-        }
-    }
-    return {
-        result_id:    r.result_id,
-        bib:          r.bib,
-        name:         r.athletes.name,
-        team:         r.athletes.team,
-        gender:       r.athletes.gender,
-        age_at_race:  age,
-        age_group,
-        race_name:    r.races.name,
-        race_date:    r.races.date,
-        chip_ms,
-        swim_ms:      intervalToMs(r.swim),
-        t1_ms:        intervalToMs(r.t1),
-        bike_ms:      intervalToMs(r.bike),
-        t2_ms:        intervalToMs(r.t2),
-        run_ms:       intervalToMs(r.run),
-        overall_rank: r.overall_rank,
-    };
-}
-
-const PAGE_SIZES = [25, 50, 100];
-const SWIM_KM = 0.4;
-const BIKE_KM = 20;
-const RUN_KM  = 5;
-
-function pad(n: number) { return n.toString().padStart(2, "0"); }
-
-function median(nums: number[]): number {
-    if (!nums.length) return 0;
-    const sorted = [...nums].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 === 0
-        ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
-        : sorted[mid];
-}
-
-function formatTime(ms: number): string {
-    const s   = Math.floor(ms / 1000);
-    const h   = Math.floor(s / 3600);
-    const m   = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
-}
-
-function swimPaceStr(ms: number | null): string {
-    if (!ms) return "—";
-    return `${formatTime(ms / (SWIM_KM * 10))}/100m`;
-}
-
-function bikePaceStr(ms: number | null): string {
-    if (!ms) return "—";
-    return `${(BIKE_KM / (ms / 3_600_000)).toFixed(1)} km/h`;
-}
-
-function runPaceStr(ms: number | null): string {
-    if (!ms) return "—";
-    return `${formatTime(ms / RUN_KM)}/km`;
-}
+import {
+    RawResult, DisplayRow,
+    isSantaClara, toDisplayRow, formatTime, median,
+} from "@/lib/triathlon";
+import { ScuSummary } from "@/components/ScuSummary";
+import { SplitsChart } from "@/components/SplitsChart";
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 
-function StatCard({
-    label, value, sub, accent,
-}: {
+function StatCard({ label, value, sub, accent }: {
     label: string; value: string; sub?: string; accent?: boolean;
 }) {
     return (
         <div className={`rounded-xl border px-5 py-4 shadow-sm ${
-            accent
-                ? "border-cardinal-200 bg-cardinal-50"
-                : "border-gray-200 bg-white"
+            accent ? "border-cardinal-200 bg-cardinal-50" : "border-gray-200 bg-white"
         }`}>
             <p className="text-xs font-medium uppercase tracking-wider text-gray-400">{label}</p>
             <p className={`mt-1 text-2xl font-bold ${accent ? "text-cardinal-800" : "text-gray-900"}`}>{value}</p>
@@ -171,337 +27,16 @@ function StatCard({
     );
 }
 
-// ─── SCU Summary ──────────────────────────────────────────────────────────────
+// ─── Dashboard Page ───────────────────────────────────────────────────────────
 
-function ScuSummary({ raceResults }: { raceResults: DisplayRow[] }) {
-    const scuAthletes = raceResults.filter((r) => isSantaClara(r.team));
-    if (scuAthletes.length === 0) return null;
-
-    const fieldAvgMs = median(raceResults.map((r) => r.chip_ms));
-
-    const scuTimes   = scuAthletes.map((r) => r.chip_ms);
-    const scuFastest = Math.min(...scuTimes);
-    const scuAvgMs   = median(scuTimes);
-    const scuVsField = scuAvgMs - fieldAvgMs;
-
-    const scuMen   = scuAthletes.filter((r) => r.gender === "M").sort((a, b) => a.chip_ms - b.chip_ms);
-    const scuWomen = scuAthletes.filter((r) => r.gender === "F").sort((a, b) => a.chip_ms - b.chip_ms);
-
-    const topScuOverall = [...scuAthletes].sort((a, b) => a.chip_ms - b.chip_ms).slice(0, 3);
-
-    const scuWithSplits   = scuAthletes.filter((r) => r.swim_ms && r.bike_ms && r.run_ms);
-    const fieldWithSplits = raceResults.filter((r) => r.swim_ms && r.bike_ms && r.run_ms);
-
-    function segAvg(rows: DisplayRow[], key: keyof DisplayRow) {
-        if (!rows.length) return null;
-        const vals = rows.map((r) => r[key] as number).filter(Boolean);
-        return vals.length ? median(vals) : null;
-    }
-
-    const segments = [
-        { label: "Swim", scuAvg: segAvg(scuWithSplits, "swim_ms"), fieldAvg: segAvg(fieldWithSplits, "swim_ms"), color: "#2563eb" },
-        { label: "T1",   scuAvg: segAvg(scuWithSplits, "t1_ms"),   fieldAvg: segAvg(fieldWithSplits, "t1_ms"),   color: "#9ca3af" },
-        { label: "Bike", scuAvg: segAvg(scuWithSplits, "bike_ms"), fieldAvg: segAvg(fieldWithSplits, "bike_ms"), color: "#ea580c" },
-        { label: "T2",   scuAvg: segAvg(scuWithSplits, "t2_ms"),   fieldAvg: segAvg(fieldWithSplits, "t2_ms"),   color: "#9ca3af" },
-        { label: "Run",  scuAvg: segAvg(scuWithSplits, "run_ms"),  fieldAvg: segAvg(fieldWithSplits, "run_ms"),  color: "#16a34a" },
-    ];
-
-    return (
-        <div className="rounded-xl border border-cardinal-200 bg-cardinal-50 p-5 shadow-sm">
-            {/* Section header */}
-            <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cardinal-800">
-                    <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                </div>
-                <div>
-                    <h2 className="text-sm font-semibold text-cardinal-900">Santa Clara University</h2>
-                    <p className="text-xs text-cardinal-600">{scuAthletes.length} athlete{scuAthletes.length !== 1 ? "s" : ""} · {Math.round((scuAthletes.length / raceResults.length) * 100)}% of field</p>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                {/* Left: key stats */}
-                <div className="grid grid-cols-2 gap-3 lg:col-span-1">
-                    <div className="rounded-lg border border-cardinal-200 bg-white px-4 py-3 shadow-sm">
-                        <p className="text-xs font-medium uppercase tracking-wider text-gray-400">Fastest</p>
-                        <p className="mt-1 font-mono text-xl font-bold text-cardinal-800">{formatTime(scuFastest)}</p>
-                    </div>
-                    <div className="rounded-lg border border-cardinal-200 bg-white px-4 py-3 shadow-sm">
-                        <p className="text-xs font-medium uppercase tracking-wider text-gray-400">SCU Median</p>
-                        <p className="mt-1 font-mono text-xl font-bold text-cardinal-800">{formatTime(scuAvgMs)}</p>
-                    </div>
-                    <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-                        <p className="text-xs font-medium uppercase tracking-wider text-gray-400">vs. Field Median</p>
-                        <p className={`mt-1 font-mono text-xl font-bold ${scuVsField < 0 ? "text-green-600" : "text-red-600"}`}>
-                            {scuVsField < 0 ? "-" : "+"}{formatTime(Math.abs(scuVsField))}
-                        </p>
-                    </div>
-                    <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-                        <p className="text-xs font-medium uppercase tracking-wider text-gray-400">Gender</p>
-                        <p className="mt-1 text-sm font-semibold text-gray-800">
-                            {scuMen.length}<span className="ml-1 text-xs font-normal text-gray-400">M</span>
-                            <span className="mx-2 text-gray-300">/</span>
-                            {scuWomen.length}<span className="ml-1 text-xs font-normal text-gray-400">F</span>
-                        </p>
-                    </div>
-                </div>
-
-                {/* Middle: top finishers */}
-                <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm lg:col-span-1">
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Top SCU Finishers</p>
-                    <div className="space-y-2">
-                        {topScuOverall.map((r, i) => (
-                            <div key={r.result_id} className="flex items-center gap-3">
-                                <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                                    i === 0 ? "bg-yellow-100 text-yellow-700" :
-                                    i === 1 ? "bg-gray-100 text-gray-500" :
-                                              "bg-orange-100 text-orange-600"
-                                }`}>{i + 1}</span>
-                                <span className="min-w-0 flex-1 truncate text-sm text-gray-800">{r.name}</span>
-                                <span className="text-xs text-gray-400">{r.gender}</span>
-                                <span className="font-mono text-xs font-semibold text-cardinal-700">{formatTime(r.chip_ms)}</span>
-                            </div>
-                        ))}
-                    </div>
-                    {(scuMen.length > 0 || scuWomen.length > 0) && (
-                        <div className="mt-3 border-t border-gray-100 pt-3">
-                            <p className="mb-2 text-xs font-medium text-gray-400">Best by gender</p>
-                            <div className="space-y-1.5">
-                                {scuMen[0] && (
-                                    <div className="flex items-center gap-2 text-xs">
-                                        <span className="w-3 font-semibold text-blue-600">M</span>
-                                        <span className="flex-1 truncate text-gray-700">{scuMen[0].name}</span>
-                                        <span className="font-mono font-semibold text-cardinal-700">{formatTime(scuMen[0].chip_ms)}</span>
-                                    </div>
-                                )}
-                                {scuWomen[0] && (
-                                    <div className="flex items-center gap-2 text-xs">
-                                        <span className="w-3 font-semibold text-pink-500">F</span>
-                                        <span className="flex-1 truncate text-gray-700">{scuWomen[0].name}</span>
-                                        <span className="font-mono font-semibold text-cardinal-700">{formatTime(scuWomen[0].chip_ms)}</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Right: split comparison */}
-                <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm lg:col-span-1">
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">SCU Median Splits vs. Field</p>
-                    <div className="space-y-2.5">
-                        {segments.filter((s) => s.scuAvg && s.fieldAvg).map((seg) => {
-                            const delta    = (seg.scuAvg ?? 0) - (seg.fieldAvg ?? 0);
-                            const pct      = Math.abs(delta) / (seg.fieldAvg ?? 1);
-                            const barWidth = Math.min(pct * 400, 100);
-                            return (
-                                <div key={seg.label} className="flex items-center gap-3">
-                                    <span className="w-8 text-xs font-medium" style={{ color: seg.color }}>{seg.label}</span>
-                                    <div className="flex flex-1 items-center gap-2">
-                                        <span className="w-12 text-right font-mono text-xs text-gray-500">{seg.scuAvg ? formatTime(seg.scuAvg) : "—"}</span>
-                                        <div className="relative flex-1">
-                                            <div className="h-1.5 w-full rounded-full bg-gray-100" />
-                                            {delta !== 0 && (
-                                                <div
-                                                    className={`absolute top-0 h-1.5 rounded-full ${delta < 0 ? "bg-green-500" : "bg-red-400"}`}
-                                                    style={{ width: `${barWidth}%`, left: delta < 0 ? 0 : `${100 - barWidth}%` }}
-                                                />
-                                            )}
-                                        </div>
-                                        <span className={`w-14 text-right font-mono text-xs font-medium ${delta < 0 ? "text-green-600" : "text-red-500"}`}>
-                                            {delta < 0 ? "-" : "+"}{formatTime(Math.abs(delta))}
-                                        </span>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ─── Histogram ────────────────────────────────────────────────────────────────
-
-function Histogram({ all, filtered }: { all: DisplayRow[]; filtered: DisplayRow[] }) {
-    const BIN_MS = 10 * 60 * 1000;
-    const times  = all.map((r) => r.chip_ms);
-    const minT   = Math.floor(Math.min(...times) / BIN_MS) * BIN_MS;
-    const maxT   = Math.ceil(Math.max(...times) / BIN_MS) * BIN_MS;
-    const numBins = Math.max((maxT - minT) / BIN_MS, 1);
-
-    const bins = Array.from({ length: numBins }, (_, i) => {
-        const lo         = minT + i * BIN_MS;
-        const hi         = lo + BIN_MS;
-        const inAll      = all.filter((r) => r.chip_ms >= lo && r.chip_ms < hi).length;
-        const inFiltered = filtered.filter((r) => r.chip_ms >= lo && r.chip_ms < hi);
-        const sc         = inFiltered.filter((r) => isSantaClara(r.team)).length;
-        const others     = inFiltered.length - sc;
-        return { lo, all: inAll, others, sc };
-    });
-
-    const maxCount = Math.max(...bins.map((b) => b.all), 1);
-    const W = 800, H = 150, PAD_B = 28;
-    const barW = W / numBins - 2;
-
-    return (
-        <div>
-            <div className="mb-3 flex items-start justify-between gap-4">
-                <h3 className="text-sm font-semibold text-gray-700">
-                    Finish Time Distribution
-                    <span className="ml-2 text-xs font-normal text-gray-400">10-min bins</span>
-                </h3>
-                <div className="flex flex-shrink-0 items-center gap-4 text-xs text-gray-400">
-                    <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm bg-blue-400" />Others</span>
-                    <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm bg-cardinal-700" />Santa Clara</span>
-                    <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm bg-gray-200" />Filtered out</span>
-                </div>
-            </div>
-            <svg viewBox={`0 0 ${W} ${H + PAD_B}`} className="w-full" style={{ height: 190 }}>
-                {bins.map((bin, i) => {
-                    const x    = i * (W / numBins) + 1;
-                    const allH = (bin.all    / maxCount) * H;
-                    const scH  = (bin.sc     / maxCount) * H;
-                    const othH = (bin.others / maxCount) * H;
-                    return (
-                        <g key={i}>
-                            {bin.all > 0 && <rect x={x} y={H - allH}       width={barW} height={allH}  fill="#e5e7eb" rx={2} />}
-                            {othH    > 0 && <rect x={x} y={H - othH - scH} width={barW} height={othH}  fill="#60a5fa" opacity={0.8} rx={2} />}
-                            {scH     > 0 && <rect x={x} y={H - scH}        width={barW} height={scH}   fill="#862633" rx={2} />}
-                            {i % 2 === 0 && (
-                                <text x={x + barW / 2} y={H + PAD_B - 4} textAnchor="middle" fill="#9ca3af" fontSize={9}>
-                                    {formatTime(bin.lo)}
-                                </text>
-                            )}
-                        </g>
-                    );
-                })}
-                <line x1={0} y1={H} x2={W} y2={H} stroke="#e5e7eb" strokeWidth={1} />
-            </svg>
-        </div>
-    );
-}
-
-// ─── Splits Chart ─────────────────────────────────────────────────────────────
-
-function SplitsChart({ result, avgResult }: { result: DisplayRow; avgResult: DisplayRow }) {
-    const segments = [
-        { key: "swim", label: "Swim", color: "#2563eb", ms: result.swim_ms, avgMs: avgResult.swim_ms },
-        { key: "t1",   label: "T1",   color: "#9ca3af", ms: result.t1_ms,   avgMs: avgResult.t1_ms   },
-        { key: "bike", label: "Bike", color: "#ea580c", ms: result.bike_ms, avgMs: avgResult.bike_ms  },
-        { key: "t2",   label: "T2",   color: "#9ca3af", ms: result.t2_ms,   avgMs: avgResult.t2_ms   },
-        { key: "run",  label: "Run",  color: "#16a34a", ms: result.run_ms,  avgMs: avgResult.run_ms   },
-    ];
-
-    const total    = segments.reduce((s, seg) => s + (seg.ms    ?? 0), 0) || result.chip_ms;
-    const avgTotal = segments.reduce((s, seg) => s + (seg.avgMs ?? 0), 0) || avgResult.chip_ms;
-    const isSC     = isSantaClara(result.team);
-
-    const Bar = ({ segs, totalMs, dim }: { segs: typeof segments; totalMs: number; dim?: boolean }) => (
-        <div className={`flex h-9 w-full overflow-hidden rounded-lg ${dim ? "opacity-40" : ""}`}>
-            {segs.map((seg) => {
-                const msVal = dim ? seg.avgMs : seg.ms;
-                const pct   = ((msVal ?? 0) / totalMs) * 100;
-                if (pct < 0.3) return null;
-                return (
-                    <div key={seg.key} style={{ width: `${pct}%`, backgroundColor: seg.color }}
-                        className="flex items-center justify-center overflow-hidden"
-                        title={`${seg.label}: ${msVal ? formatTime(msVal) : "—"}`}>
-                        {pct > 7 && <span className="select-none font-medium text-white" style={{ fontSize: 11 }}>{seg.label}</span>}
-                    </div>
-                );
-            })}
-        </div>
-    );
-
-    const Legend = ({ segs, dim }: { segs: typeof segments; dim?: boolean }) => (
-        <div className="mt-1.5 flex flex-wrap gap-3">
-            {segs.map((seg) => {
-                const msVal = dim ? seg.avgMs : seg.ms;
-                return (
-                    <span key={seg.key} className="text-xs">
-                        <span style={{ color: seg.color }} className="font-medium">{seg.label}</span>
-                        <span className="text-gray-500"> {msVal ? formatTime(msVal) : "—"}</span>
-                    </span>
-                );
-            })}
-        </div>
-    );
-
-    return (
-        <div className="space-y-4">
-            <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-800">{result.name}</span>
-                <span className="text-xs text-gray-400">#{result.bib}</span>
-                {isSC && (
-                    <span className="rounded-full border border-cardinal-200 bg-cardinal-50 px-2 py-0.5 text-xs font-medium text-cardinal-700">
-                        Santa Clara
-                    </span>
-                )}
-                {result.team && !isSC && (
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{result.team}</span>
-                )}
-                <span className="ml-auto font-mono text-sm font-semibold text-cardinal-700">{formatTime(result.chip_ms)}</span>
-            </div>
-
-            <div>
-                <p className="mb-1.5 text-xs text-gray-400">Athlete splits</p>
-                <Bar segs={segments} totalMs={total} />
-                <Legend segs={segments} />
-            </div>
-
-            <div>
-                <p className="mb-1.5 text-xs text-gray-400">Field median</p>
-                <Bar segs={segments} totalMs={avgTotal} dim />
-                <Legend segs={segments} dim />
-            </div>
-
-            <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
-                <p className="mb-2 text-xs font-medium text-gray-400">vs. field median</p>
-                <div className="flex flex-wrap gap-4">
-                    {segments.filter((s) => s.ms && s.avgMs).map((seg) => {
-                        const delta = (seg.ms ?? 0) - (seg.avgMs ?? 0);
-                        return (
-                            <span key={seg.key} className="text-xs">
-                                <span style={{ color: seg.color }} className="font-medium">{seg.label}</span>
-                                <span className={delta < 0 ? "text-green-600" : "text-red-500"}>
-                                    {" "}{delta < 0 ? "-" : "+"}{formatTime(Math.abs(delta))}
-                                </span>
-                            </span>
-                        );
-                    })}
-                    <span className="ml-auto text-xs">
-                        <span className="text-gray-400">Total </span>
-                        {(() => {
-                            const d = result.chip_ms - avgResult.chip_ms;
-                            return <span className={d < 0 ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{d < 0 ? "-" : "+"}{formatTime(Math.abs(d))}</span>;
-                        })()}
-                    </span>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-
-export default function Home() {
-    const [allResults, setAllResults]       = useState<DisplayRow[]>([]);
-    const [loading, setLoading]             = useState(true);
-    const [error, setError]                 = useState<string | null>(null);
-    const [selectedResult, setSelectedResult] = useState<DisplayRow | null>(null);
-    const [selectedRace, setSelectedRace]   = useState<string>("All");
-    const [scOnly, setScOnly]               = useState(false);
-    const [genderFilter, setGenderFilter]   = useState("All");
-    const [ageGroupFilter, setAgeGroupFilter] = useState("All");
-    const [teamFilter, setTeamFilter]       = useState("All");
-    const [sortKey, setSortKey]             = useState<keyof DisplayRow>("chip_ms");
-    const [sortDir, setSortDir]             = useState<"asc" | "desc">("asc");
-    const [page, setPage]                   = useState(0);
-    const [pageSize, setPageSize]           = useState(25);
+export default function Dashboard() {
+    const [allResults, setAllResults] = useState<DisplayRow[]>([]);
+    const [loading, setLoading]       = useState(true);
+    const [error, setError]           = useState<string | null>(null);
+    const [selectedRace, setSelectedRace] = useState<string>("All");
+    const [athleteQuery, setAthleteQuery] = useState("");
+    const [selectedAthlete, setSelectedAthlete] = useState<DisplayRow | null>(null);
+    const [dropdownOpen, setDropdownOpen] = useState(false);
 
     const fetchResults = useCallback(async () => {
         if (!supabase) {
@@ -547,52 +82,20 @@ export default function Home() {
     );
 
     useEffect(() => {
-        setScOnly(false); setGenderFilter("All"); setAgeGroupFilter("All");
-        setTeamFilter("All"); setSelectedResult(null); setPage(0);
+        setSelectedAthlete(null);
+        setAthleteQuery("");
     }, [selectedRace]);
-
-    const uniqueTeams = useMemo(() => {
-        const teams = [...new Set(raceResults.map((r) => r.team).filter(Boolean) as string[])].sort();
-        return ["All", ...teams];
-    }, [raceResults]);
-
-    const uniqueAgeGroups = useMemo(() => {
-        const ags = [...new Set(raceResults.map((r) => r.age_group).filter(Boolean) as string[])].sort();
-        return ["All", ...ags];
-    }, [raceResults]);
-
-    const filteredSorted = useMemo(() => {
-        const rows = raceResults.filter((r) => {
-            if (scOnly && !isSantaClara(r.team)) return false;
-            if (genderFilter !== "All" && r.gender !== genderFilter) return false;
-            if (ageGroupFilter !== "All" && r.age_group !== ageGroupFilter) return false;
-            if (teamFilter !== "All" && r.team !== teamFilter) return false;
-            return true;
-        });
-        return [...rows].sort((a, b) => {
-            const av = a[sortKey], bv = b[sortKey];
-            if (av == null && bv == null) return 0;
-            if (av == null) return 1;
-            if (bv == null) return -1;
-            const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-            return sortDir === "asc" ? cmp : -cmp;
-        });
-    }, [raceResults, scOnly, genderFilter, ageGroupFilter, teamFilter, sortKey, sortDir]);
-
-    useEffect(() => { setPage(0); }, [scOnly, genderFilter, ageGroupFilter, teamFilter, sortKey, sortDir]);
-
-    const totalPages   = Math.ceil(filteredSorted.length / pageSize);
-    const displayedRows = useMemo(
-        () => filteredSorted.slice(page * pageSize, (page + 1) * pageSize).map((r, i) => ({ result: r, rank: page * pageSize + i + 1 })),
-        [filteredSorted, page, pageSize],
-    );
 
     const stats = useMemo(() => {
         if (!raceResults.length) return null;
         const scAthletes = raceResults.filter((r) => isSantaClara(r.team));
         const times      = raceResults.map((r) => r.chip_ms);
-        const avgMs      = median(times);
-        return { total: raceResults.length, scCount: scAthletes.length, fastest: Math.min(...times), avg: avgMs };
+        return {
+            total:    raceResults.length,
+            scCount:  scAthletes.length,
+            fastest:  Math.min(...times),
+            medianMs: median(times),
+        };
     }, [raceResults]);
 
     const avgResult = useMemo((): DisplayRow | null => {
@@ -607,24 +110,23 @@ export default function Home() {
         };
     }, [raceResults]);
 
-    function handleSort(key: keyof DisplayRow) {
-        if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-        else { setSortKey(key); setSortDir("asc"); }
-    }
-
-    function SortIcon({ col }: { col: keyof DisplayRow }) {
-        if (col !== sortKey) return <span className="text-gray-300 text-xs">↕</span>;
-        return <span className="text-cardinal-600 text-xs">{sortDir === "asc" ? "↑" : "↓"}</span>;
-    }
-
-    function Th({ col, children }: { col: keyof DisplayRow; children: React.ReactNode }) {
-        return (
-            <th onClick={() => handleSort(col)}
-                className="cursor-pointer select-none whitespace-nowrap px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400 transition-colors hover:text-cardinal-700">
-                <div className="flex items-center gap-1">{children} <SortIcon col={col} /></div>
-            </th>
+    // Athlete search – show SCU athletes prominently, then others
+    const athleteSuggestions = useMemo(() => {
+        const q = athleteQuery.trim().toLowerCase();
+        const pool = raceResults.filter((r) =>
+            !q || r.name.toLowerCase().includes(q)
         );
-    }
+        // Deduplicate by result_id (already unique), sort SCU first then by time
+        return pool
+            .slice()
+            .sort((a, b) => {
+                const aSC = isSantaClara(a.team) ? 0 : 1;
+                const bSC = isSantaClara(b.team) ? 0 : 1;
+                if (aSC !== bSC) return aSC - bSC;
+                return a.chip_ms - b.chip_ms;
+            })
+            .slice(0, 20);
+    }, [raceResults, athleteQuery]);
 
     if (loading) {
         return (
@@ -642,21 +144,29 @@ export default function Home() {
 
     return (
         <div className="min-h-screen bg-gray-50 p-6">
-            <div className="mx-auto max-w-screen-2xl space-y-6">
+            <div className="mx-auto max-w-screen-xl space-y-6">
 
                 {/* ── Header ── */}
-                <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-cardinal-800 shadow-md">
-                        <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-cardinal-800 shadow-md">
+                            <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-cardinal-900">Treeathlon 2026</h1>
+                            <p className="text-sm text-gray-400">Sprint Triathlon · 0.4 km swim / 20 km bike / 5 km run</p>
+                        </div>
+                    </div>
+                    <Link
+                        href="/races"
+                        className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 shadow-sm transition-all hover:border-cardinal-300 hover:text-cardinal-700">
+                        Race Results
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
-                    </div>
-                    <div>
-                        <h1 className="text-3xl font-bold text-cardinal-900">
-                            Treeathlon 2026
-                        </h1>
-                        <p className="text-sm text-gray-400">Sprint Triathlon · 0.4 km swim / 20 km bike / 5 km run</p>
-                    </div>
+                    </Link>
                 </div>
 
                 {/* ── Race Selector ── */}
@@ -687,9 +197,7 @@ export default function Home() {
                                 const count    = allResults.filter((r) => r.race_name === race.name).length;
                                 const isActive = selectedRace === race.name;
                                 return (
-                                    <button
-                                        key={race.name}
-                                        onClick={() => setSelectedRace(race.name)}
+                                    <button key={race.name} onClick={() => setSelectedRace(race.name)}
                                         className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
                                             isActive
                                                 ? "bg-cardinal-800 text-white shadow-sm"
@@ -724,183 +232,71 @@ export default function Home() {
                         <StatCard label="Santa Clara Athletes" value={stats.scCount.toString()}
                             sub={`${Math.round((stats.scCount / stats.total) * 100)}% of field`} accent />
                         <StatCard label="Fastest Time"  value={formatTime(stats.fastest)} />
-                        <StatCard label="Median Time"  value={formatTime(stats.avg)} />
+                        <StatCard label="Median Time"   value={formatTime(stats.medianMs)} />
                     </div>
                 )}
 
                 {/* ── SCU Summary ── */}
                 {raceResults.length > 0 && <ScuSummary raceResults={raceResults} />}
 
-                {/* ── Filters ── */}
-                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <div className="flex flex-wrap items-center gap-3">
-                        <button onClick={() => setScOnly((v) => !v)}
-                            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-                                scOnly
-                                    ? "bg-cardinal-800 text-white shadow-sm"
-                                    : "border border-gray-200 bg-white text-gray-500 hover:border-cardinal-200 hover:text-cardinal-700"
-                            }`}>
-                            <span className="h-2 w-2 rounded-full bg-current" />
-                            Santa Clara Only
-                        </button>
+                {/* ── Individual Athlete Performance ── */}
+                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                    <h2 className="mb-4 text-sm font-semibold text-gray-700">Individual Performance</h2>
 
-                        <div className="flex items-center gap-0.5 rounded-lg border border-gray-200 bg-gray-50 p-1">
-                            {(["All", "M", "F"] as const).map((g) => (
-                                <button key={g} onClick={() => setGenderFilter(g)}
-                                    className={`rounded-md px-3 py-1 text-sm font-medium transition-all ${
-                                        genderFilter === g
-                                            ? "bg-cardinal-800 text-white shadow-sm"
-                                            : "text-gray-500 hover:text-gray-700"
-                                    }`}>
-                                    {g}
-                                </button>
-                            ))}
+                    {/* Athlete search */}
+                    <div className="relative mb-5 max-w-sm">
+                        <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
+                            <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
                         </div>
-
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-gray-400">Age</label>
-                            <select value={ageGroupFilter} onChange={(e) => setAgeGroupFilter(e.target.value)}
-                                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none">
-                                {uniqueAgeGroups.map((ag) => <option key={ag} value={ag}>{ag}</option>)}
-                            </select>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <label className="text-xs font-medium text-gray-400">Team</label>
-                            <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)}
-                                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none">
-                                {uniqueTeams.map((t) => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                        </div>
-
-                        <span className="ml-auto text-sm text-gray-400">
-                            <span className="font-semibold text-gray-700">{filteredSorted.length}</span> result{filteredSorted.length !== 1 ? "s" : ""}
-                        </span>
-
-                        {(scOnly || genderFilter !== "All" || ageGroupFilter !== "All" || teamFilter !== "All") && (
-                            <button onClick={() => { setScOnly(false); setGenderFilter("All"); setAgeGroupFilter("All"); setTeamFilter("All"); }}
-                                className="text-xs text-gray-400 underline underline-offset-2 hover:text-gray-600">
-                                Clear filters
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                {/* ── Table controls ── */}
-                <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
-                        Show
-                        <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
-                            className="rounded border border-gray-200 bg-white px-2 py-1 text-sm text-gray-600 focus:outline-none">
-                            {PAGE_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                        <span>· {filteredSorted.length > 0 ? page * pageSize + 1 : 0}–{Math.min((page + 1) * pageSize, filteredSorted.length)} of {filteredSorted.length}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
-                            className="rounded border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-500 hover:border-cardinal-300 hover:text-cardinal-700 disabled:cursor-not-allowed disabled:opacity-40">←</button>
-                        <span className="rounded bg-cardinal-50 px-3 py-1 text-sm font-semibold text-cardinal-700 border border-cardinal-200">{page + 1} / {totalPages || 1}</span>
-                        <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
-                            className="rounded border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-500 hover:border-cardinal-300 hover:text-cardinal-700 disabled:cursor-not-allowed disabled:opacity-40">→</button>
-                    </div>
-                </div>
-
-                {/* ── Table ── */}
-                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-gray-200 bg-gray-50">
-                                    <th className="w-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">#</th>
-                                    <Th col="bib">Bib</Th>
-                                    <Th col="name">Athlete</Th>
-                                    <Th col="team">Team</Th>
-                                    <Th col="gender">Sex</Th>
-                                    <Th col="age_group">Age</Th>
-                                    <Th col="chip_ms">Total</Th>
-                                    <Th col="swim_ms">Swim</Th>
-                                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">Pace</th>
-                                    <Th col="t1_ms">T1</Th>
-                                    <Th col="bike_ms">Bike</Th>
-                                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">Speed</th>
-                                    <Th col="t2_ms">T2</Th>
-                                    <Th col="run_ms">Run</Th>
-                                    <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">Pace</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {displayedRows.length === 0 ? (
-                                    <tr><td colSpan={15} className="px-6 py-16 text-center text-gray-400">No results match the current filters</td></tr>
-                                ) : (
-                                    displayedRows.map(({ result: r, rank }) => {
-                                        const isSC       = isSantaClara(r.team);
-                                        const isSelected = selectedResult?.result_id === r.result_id;
-                                        return (
-                                            <tr key={r.result_id}
-                                                onClick={() => setSelectedResult(isSelected ? null : r)}
-                                                className={`cursor-pointer transition-colors ${
-                                                    isSelected ? "border-l-2 border-l-cardinal-600 bg-cardinal-50"
-                                                    : isSC     ? "border-l-2 border-l-cardinal-600 bg-cardinal-50/40 hover:bg-cardinal-50/70"
-                                                               : "border-l-2 border-l-transparent hover:bg-gray-50"
-                                                }`}>
-                                                <td className="px-3 py-2.5 text-xs text-gray-300">{rank}</td>
-                                                <td className="px-3 py-2.5 font-mono text-gray-400">{r.bib}</td>
-                                                <td className="px-3 py-2.5 font-medium text-gray-800 whitespace-nowrap">{r.name}</td>
-                                                <td className="px-3 py-2.5">
-                                                    {r.team ? (
-                                                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                                            isSC ? "border border-cardinal-200 bg-cardinal-50 text-cardinal-700"
-                                                                 : "bg-gray-100 text-gray-500"
-                                                        }`}>{r.team}</span>
-                                                    ) : <span className="text-gray-200">—</span>}
-                                                </td>
-                                                <td className="px-3 py-2.5 text-gray-500">{r.gender ?? <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 text-gray-500">{r.age_group ?? <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 font-mono font-semibold text-cardinal-700">{formatTime(r.chip_ms)}</td>
-                                                <td className="px-3 py-2.5 font-mono text-gray-600">{r.swim_ms ? formatTime(r.swim_ms) : <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 text-xs text-gray-400">{swimPaceStr(r.swim_ms)}</td>
-                                                <td className="px-3 py-2.5 font-mono text-gray-400">{r.t1_ms ? formatTime(r.t1_ms) : <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 font-mono text-gray-600">{r.bike_ms ? formatTime(r.bike_ms) : <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 text-xs text-gray-400">{bikePaceStr(r.bike_ms)}</td>
-                                                <td className="px-3 py-2.5 font-mono text-gray-400">{r.t2_ms ? formatTime(r.t2_ms) : <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 font-mono text-gray-600">{r.run_ms ? formatTime(r.run_ms) : <span className="text-gray-200">—</span>}</td>
-                                                <td className="px-3 py-2.5 text-xs text-gray-400">{runPaceStr(r.run_ms)}</td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                {/* ── Charts ── */}
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                        {raceResults.length > 0 ? (
-                            <Histogram all={raceResults} filtered={filteredSorted} />
-                        ) : (
-                            <p className="text-center text-sm text-gray-300">No data</p>
-                        )}
-                    </div>
-
-                    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                        <h3 className="mb-4 text-sm font-semibold text-gray-700">
-                            Splits Breakdown
-                            {!selectedResult && <span className="ml-2 text-xs font-normal text-gray-400">— click a row to inspect</span>}
-                        </h3>
-                        {selectedResult && avgResult ? (
-                            <SplitsChart result={selectedResult} avgResult={avgResult} />
-                        ) : (
-                            <div className="flex min-h-40 flex-col items-center justify-center gap-3 text-gray-300">
-                                <svg className="h-10 w-10 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                </svg>
-                                <p className="text-sm text-gray-400">Select an athlete from the table above</p>
+                        <input
+                            type="text"
+                            placeholder="Search athlete…"
+                            value={athleteQuery}
+                            onChange={(e) => { setAthleteQuery(e.target.value); setDropdownOpen(true); }}
+                            onFocus={() => setDropdownOpen(true)}
+                            className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-700 focus:border-cardinal-400 focus:outline-none"
+                        />
+                        {dropdownOpen && athleteSuggestions.length > 0 && (
+                            <div className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                                {athleteSuggestions.map((r) => {
+                                    const isSC = isSantaClara(r.team);
+                                    return (
+                                        <button key={r.result_id}
+                                            onClick={() => {
+                                                setSelectedAthlete(r);
+                                                setAthleteQuery(r.name);
+                                                setDropdownOpen(false);
+                                            }}
+                                            className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-gray-50 ${
+                                                selectedAthlete?.result_id === r.result_id ? "bg-cardinal-50" : ""
+                                            }`}>
+                                            {isSC && (
+                                                <span className="flex-shrink-0 rounded-full border border-cardinal-200 bg-cardinal-50 px-1.5 py-0.5 text-xs font-medium text-cardinal-700">SCU</span>
+                                            )}
+                                            <span className="flex-1 font-medium text-gray-800">{r.name}</span>
+                                            <span className="text-xs text-gray-400">{r.gender} · {r.age_group ?? "—"}</span>
+                                            <span className="font-mono text-xs font-semibold text-cardinal-700">{formatTime(r.chip_ms)}</span>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
+
+                    {/* Splits chart */}
+                    {selectedAthlete && avgResult ? (
+                        <SplitsChart result={selectedAthlete} avgResult={avgResult} />
+                    ) : (
+                        <div className="flex min-h-40 flex-col items-center justify-center gap-3 text-gray-300">
+                            <svg className="h-10 w-10 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            <p className="text-sm text-gray-400">Search for an athlete above to view their splits</p>
+                        </div>
+                    )}
                 </div>
 
             </div>
