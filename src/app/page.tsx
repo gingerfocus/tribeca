@@ -54,6 +54,7 @@ export default function Dashboard() {
             `)
             .then(({ data, error: e }) => {
                 if (e) { setError(e.message); setLoading(false); return; }
+                // TODO: fix this convertion
                 const rows = (data as unknown as RawResult[])
                     .map(toDisplayRow)
                     .filter((r): r is DisplayRow => r !== null)

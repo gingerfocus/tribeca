@@ -5,6 +5,7 @@ CREATE TABLE races (
   name TEXT NOT NULL,          -- "Aggieathlon 2025"
   date DATE,
   type TEXT,                   -- "Sprint", "Olympic", etc.
+  -- TODO: add segment distances
   location TEXT
 );
 
@@ -20,8 +21,9 @@ CREATE TABLE results (
   result_id SERIAL PRIMARY KEY,
   race_id INT REFERENCES races(id),
   athlete_id INT REFERENCES athletes(id),
+  -- TODO: remove this in place of division
   age_at_race INT,
-  bib INT,
+  bib INT NOT NULL,
   swim INTERVAL,
   t1 INTERVAL,
   bike INTERVAL,
