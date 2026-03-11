@@ -87,6 +87,11 @@ export function intervalToMs(iv: string | null | undefined): number | null {
             const s = parseFloat(parts[2]);
             return Math.round((h * 3600 + m * 60 + s) * 1000);
         }
+        if (parts.length === 2) {
+            const m = parseInt(parts[0]);
+            const s = parseFloat(parts[1]);
+            return Math.round((m * 60 + s) * 1000);
+        }
     } catch { /* fall through */ }
     return null;
 }
