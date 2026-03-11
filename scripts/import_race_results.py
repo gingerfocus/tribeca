@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import csv
 import sys
+import uuid
 from datetime import datetime
 
 def parse_time_to_ms(time_str):
@@ -47,12 +48,14 @@ def generate_sql(csv_path, race_name, event_date, race_type='triathlon'):
             
             if bib == '63' and name == '':
                 continue
-                
+            
+            bib_int = int(bib)
+            
             if bib in seen_people:
-                person_id = seen_people[bib]
+                person_uuid = seen_people[bib]
             else:
-                person_id = f"P{bib.zfill(4)}"
-                seen_people[bib] = person_id
+                person_uuid = str(uuid.uuid4())
+                seen_people[bib] = person_uuid
                 
                 team = row.get('Team Name', '').strip()
                 city = row.get('City', '').strip()
@@ -61,8 +64,8 @@ def generate_sql(csv_path, race_name, event_date, race_type='triathlon'):
                 city_val = f"'{escape_sql(city)}'" if city else 'NULL'
                 
                 person_inserts.append(
-                    f"INSERT INTO person_ids (external_id, name, team_name, city) VALUES "
-                    f"('{bib}', '{escape_sql(name)}', {team_val}, {city_val});"
+                    f"INSERT INTO person_ids (id, name, team_name, city) VALUES "
+                    f"('{person_uuid}', '{escape_sql(name)}', {team_val}, {city_val});"
                 )
             
             chip_elapsed = row.get('Chip Elapsed', '').strip()
@@ -99,10 +102,10 @@ def generate_sql(csv_path, race_name, event_date, race_type='triathlon'):
             gender_val = f"'{gender}'" if gender else 'NULL'
             
             race_inserts.append(
-                f"INSERT INTO race_results (person_id, race_type, race_name, distance, time_ms, event_date, "
+                f"INSERT INTO race_results (id, bib_number, race_type, race_name, distance, time_ms, event_date, "
                 f"age_group, gender, swim_distance, bike_distance, run_distance, "
                 f"swim_time_ms, transition1_time_ms, bike_time_ms, transition2_time_ms, run_time_ms) VALUES "
-                f"('{person_id}', '{race_type}', '{race_name}', '25.75km', {total_time_ms}, '{race_date}', "
+                f"('{person_uuid}', {bib_int}, '{race_type}', '{race_name}', '25.75km', {total_time_ms}, '{race_date}', "
                 f"{age_group_val}, {gender_val}, "
                 f"'{swim_dist}', '{bike_dist}', '{run_dist}', "
                 f"{swim_val}, {t1_val}, {bike_val}, {t2_val}, {run_val});"

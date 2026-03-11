@@ -3,23 +3,20 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 type SupabaseInstance = SupabaseClient | null;
 
 function getSupabaseClient(): SupabaseInstance {
-    let supabaseUrl;
-    let supabasePublishableKey;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    // if (process.env.NODE_ENV === "development") {
-    //     supabaseUrl = "http://127.0.0.1:54321";
-    //     supabasePublishableKey = "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH";
-    // } else {
-        supabaseUrl = "https://chkulbjaexjhqzltdfth.supabase.co";
-        supabasePublishableKey = "sb_publishable_0T-zu-ZmhPEeJTESOgZfYA_Ff0AcAr8";
-    // }
-
-    if (!supabaseUrl || !supabasePublishableKey) {
+    if (!supabaseUrl || !supabaseAnonKey) {
         return null;
     }
 
     try {
-        return createClient(supabaseUrl, supabasePublishableKey);
+        return createClient(supabaseUrl, supabaseAnonKey, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+            },
+        });
     } catch {
         return null;
     }

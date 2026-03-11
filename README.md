@@ -10,3 +10,5 @@ npm run dev
 ```
 
 runs on `:3000` by default
+
+opencode -s ses_325b22d7fffemWvwoi13dustG9
