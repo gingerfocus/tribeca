@@ -63,7 +63,7 @@ export const SANTA_CLARA_NAMES = new Set([
 
 export const PAGE_SIZES = [25, 50, 100];
 
-export const DEFAULT_SWIM_KM = 0.4;
+export const DEFAULT_SWIM_KM = 0.75;
 export const DEFAULT_BIKE_KM = 20;
 export const DEFAULT_RUN_KM  = 5;
 

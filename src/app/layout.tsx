@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Treeathlon 2026 Results",
-  description: "Race results for the 2026 Treeathlon sprint triathlon",
+  title: "SCU Triathlon Results",
+  description: "Race results for SCU triathlon events",
 };
 
 export default function RootLayout({

@@ -37,6 +37,7 @@ export default function Dashboard() {
     const [athleteQuery, setAthleteQuery] = useState("");
     const [selectedAthlete, setSelectedAthlete] = useState<DisplayRow | null>(null);
     const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [genderExpanded, setGenderExpanded] = useState<{ M: boolean; F: boolean }>({ M: false, F: false });
 
     const fetchResults = useCallback(async () => {
         if (!supabase) {
@@ -89,15 +90,35 @@ export default function Dashboard() {
 
     const stats = useMemo(() => {
         if (!raceResults.length) return null;
-        const scAthletes = raceResults.filter((r) => isSantaClara(r.team));
-        const times      = raceResults.map((r) => r.chip_ms);
+        const times = raceResults.map((r) => r.chip_ms);
+        if (selectedRace !== "All") {
+            const scAthletes = raceResults.filter((r) => isSantaClara(r.team));
+            return {
+                total:    raceResults.length,
+                scCount:  scAthletes.length,
+                scLabel:  `${Math.round((scAthletes.length / raceResults.length) * 100)}% of field`,
+                fastest:  Math.min(...times),
+                medianMs: median(times),
+            };
+        }
+        // All races: compute per-race SCU counts and average them
+        const raceMap = new Map<string, { sc: number; total: number }>();
+        for (const r of raceResults) {
+            const entry = raceMap.get(r.race_name) ?? { sc: 0, total: 0 };
+            entry.total++;
+            if (isSantaClara(r.team)) entry.sc++;
+            raceMap.set(r.race_name, entry);
+        }
+        const perRaceCounts = [...raceMap.values()];
+        const avgSc = Math.round(perRaceCounts.reduce((s, e) => s + e.sc, 0) / perRaceCounts.length);
         return {
             total:    raceResults.length,
-            scCount:  scAthletes.length,
+            scCount:  avgSc,
+            scLabel:  `avg across ${perRaceCounts.length} race${perRaceCounts.length !== 1 ? "s" : ""}`,
             fastest:  Math.min(...times),
             medianMs: median(times),
         };
-    }, [raceResults]);
+    }, [raceResults, selectedRace]);
 
     const avgResult = useMemo((): DisplayRow | null => {
         const valid = raceResults.filter((r) => r.swim_ms && r.bike_ms && r.run_ms);
@@ -109,6 +130,62 @@ export default function Dashboard() {
             chip_ms: avg("chip_ms"), swim_ms: avg("swim_ms"), t1_ms: avg("t1_ms"),
             bike_ms: avg("bike_ms"), t2_ms: avg("t2_ms"),     run_ms: avg("run_ms"),
         };
+    }, [raceResults]);
+
+    // Gender comparison – per-race rank computed from chip_ms ordering
+    const genderComparison = useMemo(() => {
+        const scuAthletes = raceResults.filter((r) => isSantaClara(r.team));
+        if (!scuAthletes.length) return null;
+
+        // Build per-race, per-gender rank maps (sorted by chip_ms ascending)
+        const genderRankMap = new Map<number, { rank: number; total: number }>();
+        const raceGenderGroups = new Map<string, DisplayRow[]>();
+        for (const r of raceResults) {
+            if (!r.gender) continue;
+            const key = `${r.race_name}__${r.gender}`;
+            const group = raceGenderGroups.get(key) ?? [];
+            group.push(r);
+            raceGenderGroups.set(key, group);
+        }
+        for (const group of raceGenderGroups.values()) {
+            const sorted = [...group].sort((a, b) => a.chip_ms - b.chip_ms);
+            sorted.forEach((r, i) => genderRankMap.set(r.result_id, { rank: i + 1, total: sorted.length }));
+        }
+
+        // Overall rank map (used for top3 display)
+        const overallRankMap = new Map<number, { rank: number; total: number }>();
+        const raceGroups = new Map<string, DisplayRow[]>();
+        for (const r of raceResults) {
+            const group = raceGroups.get(r.race_name) ?? [];
+            group.push(r);
+            raceGroups.set(r.race_name, group);
+        }
+        for (const group of raceGroups.values()) {
+            const sorted = [...group].sort((a, b) => a.chip_ms - b.chip_ms);
+            sorted.forEach((r, i) => overallRankMap.set(r.result_id, { rank: i + 1, total: sorted.length }));
+        }
+
+        function genderStats(gender: string) {
+            const athletes = scuAthletes.filter((r) => r.gender === gender);
+            if (!athletes.length) return null;
+            const ranks = athletes.map((r) => genderRankMap.get(r.result_id)!).filter(Boolean);
+            const avgRank = Math.round(ranks.reduce((s, e) => s + e.rank, 0) / ranks.length);
+            const avgPct  = Math.round(ranks.reduce((s, e) => s + (e.rank / e.total) * 100, 0) / ranks.length);
+            const times   = athletes.map((r) => r.chip_ms);
+            const ranked = [...athletes]
+                .map((r) => ({ ...r, rank: genderRankMap.get(r.result_id)?.rank ?? Infinity, fieldSize: genderRankMap.get(r.result_id)?.total ?? 0 }))
+                .sort((a, b) => a.rank - b.rank);
+            return {
+                count:   athletes.length,
+                avgRank,
+                avgPct,
+                fastest: Math.min(...times),
+                median:  median(times),
+                ranked,
+            };
+        }
+
+        return { men: genderStats("M"), women: genderStats("F") };
     }, [raceResults]);
 
     // Athlete search – show SCU athletes prominently, then others
@@ -156,8 +233,8 @@ export default function Dashboard() {
                             </svg>
                         </div>
                         <div>
-                            <h1 className="text-3xl font-bold text-cardinal-900">Treeathlon 2026</h1>
-                            <p className="text-sm text-gray-400">Sprint Triathlon · 0.4 km swim / 20 km bike / 5 km run</p>
+                            <h1 className="text-3xl font-bold text-cardinal-900">SCU Triathlon Results</h1>
+                            <p className="text-sm text-gray-400">Sprint Triathlon · 750m swim / 20 km bike / 5 km run</p>
                         </div>
                     </div>
                     <Link
@@ -231,7 +308,7 @@ export default function Dashboard() {
                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                         <StatCard label="Total Finishers"      value={stats.total.toString()} />
                         <StatCard label="Santa Clara Athletes" value={stats.scCount.toString()}
-                            sub={`${Math.round((stats.scCount / stats.total) * 100)}% of field`} accent />
+                            sub={stats.scLabel} accent />
                         <StatCard label="Fastest Time"  value={formatTime(stats.fastest)} />
                         <StatCard label="Median Time"   value={formatTime(stats.medianMs)} />
                     </div>
@@ -239,6 +316,82 @@ export default function Dashboard() {
 
                 {/* ── SCU Summary ── */}
                 {raceResults.length > 0 && <ScuSummary raceResults={raceResults} />}
+
+                {/* ── Gender Comparison ── */}
+                {genderComparison && (genderComparison.men || genderComparison.women) && (
+                    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <h2 className="mb-4 text-sm font-semibold text-gray-700">SCU Men vs. Women</h2>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            {[
+                                { label: "Men",   gKey: "M" as const, data: genderComparison.men,   color: "text-blue-600",  bg: "bg-blue-50",  border: "border-blue-100" },
+                                { label: "Women", gKey: "F" as const, data: genderComparison.women, color: "text-pink-500",  bg: "bg-pink-50",  border: "border-pink-100" },
+                            ].map(({ label, gKey, data, color, bg, border }) => {
+                                if (!data) return null;
+                                return (
+                                    <div key={label} className={`rounded-lg border ${border} ${bg} p-4`}>
+                                        <div className="mb-3 flex items-center justify-between">
+                                            <span className={`text-sm font-semibold ${color}`}>{label}</span>
+                                            <span className="text-xs text-gray-400">{data.count} athlete{data.count !== 1 ? "s" : ""}</span>
+                                        </div>
+
+                                        {/* Avg rank percentile bar */}
+                                        <div className="mb-3">
+                                            <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
+                                                <span>Avg finishing position</span>
+                                                <span className="font-semibold">Top {data.avgPct}%</span>
+                                            </div>
+                                            <div className="h-2 w-full rounded-full bg-gray-200">
+                                                <div
+                                                    className={`h-2 rounded-full ${label === "Men" ? "bg-blue-500" : "bg-pink-400"}`}
+                                                    style={{ width: `${100 - data.avgPct}%` }}
+                                                />
+                                            </div>
+                                            <div className="mt-0.5 text-right text-xs text-gray-400">avg rank #{data.avgRank}</div>
+                                        </div>
+
+                                        {/* Key stats */}
+                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                            <div className="rounded bg-white px-3 py-2 shadow-sm">
+                                                <p className="text-gray-400">Fastest</p>
+                                                <p className="font-mono font-semibold text-cardinal-700">{formatTime(data.fastest)}</p>
+                                            </div>
+                                            <div className="rounded bg-white px-3 py-2 shadow-sm">
+                                                <p className="text-gray-400">Median</p>
+                                                <p className="font-mono font-semibold text-gray-700">{formatTime(data.median)}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Athletes list */}
+                                        <div className="mt-3">
+                                            <div className="space-y-1.5">
+                                                {(genderExpanded[gKey] ? data.ranked : data.ranked.slice(0, 3)).map((r) => (
+                                                    <div key={r.result_id} className="flex items-center gap-2 text-xs">
+                                                        <span className="w-10 flex-shrink-0 font-mono font-semibold text-cardinal-700">#{r.rank}</span>
+                                                        <span className="flex-1 truncate text-gray-700">
+                                                            {r.name}
+                                                            <span className="ml-1 text-gray-400">({r.race_name})</span>
+                                                        </span>
+                                                        <span className="text-gray-400">of {r.fieldSize}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {data.ranked.length > 3 && (
+                                                <button
+                                                    onClick={() => setGenderExpanded((prev) => ({ ...prev, [gKey]: !prev[gKey] }))}
+                                                    className="mt-2 text-xs font-medium text-gray-400 hover:text-gray-600"
+                                                >
+                                                    {genderExpanded[gKey]
+                                                        ? "Show less ▲"
+                                                        : `Show all ${data.ranked.length} athletes ▼`}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
 
                 {/* ── Individual Athlete Performance ── */}
                 <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
