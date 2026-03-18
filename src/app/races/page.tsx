@@ -98,7 +98,7 @@ export default function RacesPage() {
     const [loading, setLoading]               = useState(true);
     const [error, setError]                   = useState<string | null>(null);
     const [selectedResult, setSelectedResult] = useState<DisplayRow | null>(null);
-    const [selectedRace, setSelectedRace]     = useState<string>("All");
+    const [selectedRace, setSelectedRace]     = useState<string>("");
     const [scOnly, setScOnly]                 = useState(false);
     const [genderFilter, setGenderFilter]     = useState("All");
     const [divisionFilter, setDivisionFilter] = useState("All");
@@ -142,28 +142,22 @@ export default function RacesPage() {
         });
     }, [allResults]);
 
+    // Auto-select first race once data loads
+    useEffect(() => {
+        if (uniqueRaces.length > 0 && !selectedRace) {
+            setSelectedRace(uniqueRaces[0].name);
+        }
+    }, [uniqueRaces, selectedRace]);
+
     const raceResults = useMemo(() =>
-        selectedRace === "All" ? allResults : allResults.filter((r) => r.race_name === selectedRace),
+        allResults.filter((r) => r.race_name === selectedRace),
         [allResults, selectedRace],
     );
 
     const selectedRaceInfo = useMemo((): RaceInfo => {
-        if (selectedRace === "All") {
-            const firstWithDist = allResults.find(r => r.race_swim_km);
-            if (firstWithDist) {
-                return {
-                    name: "All Races",
-                    type: firstWithDist.race_type || "Sprint",
-                    swim: firstWithDist.race_swim_km ?? DEFAULT_DISTANCES.swim,
-                    bike: firstWithDist.race_bike_km ?? DEFAULT_DISTANCES.bike,
-                    run: firstWithDist.race_run_km ?? DEFAULT_DISTANCES.run,
-                };
-            }
-            return { name: "All Races", type: "Sprint", ...DEFAULT_DISTANCES };
-        }
         const raceData = allResults.find(r => r.race_name === selectedRace);
         return {
-            name: selectedRace,
+            name: selectedRace || "—",
             type: raceData?.race_type || "Sprint",
             swim: raceData?.race_swim_km ?? DEFAULT_DISTANCES.swim,
             bike: raceData?.race_bike_km ?? DEFAULT_DISTANCES.bike,
@@ -254,7 +248,6 @@ export default function RacesPage() {
                         uniqueRaces={uniqueRaces}
                         selectedRace={selectedRace}
                         onSelectRace={setSelectedRace}
-                        allResultsCount={allResults.length}
                     />
                 )}
 
@@ -326,12 +319,10 @@ function RaceSelector({
     uniqueRaces,
     selectedRace,
     onSelectRace,
-    allResultsCount,
 }: {
     uniqueRaces: { name: string; date: string | null }[];
     selectedRace: string;
     onSelectRace: (race: string) => void;
-    allResultsCount: number;
 }) {
     return (
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -342,22 +333,7 @@ function RaceSelector({
                 <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Race</span>
             </div>
             <div className="flex flex-wrap gap-2">
-                {uniqueRaces.length > 1 && (
-                    <button
-                        onClick={() => onSelectRace("All")}
-                        className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-                            selectedRace === "All"
-                                ? "bg-cardinal-800 text-white shadow-sm"
-                                : "border border-gray-200 bg-white text-gray-500 hover:border-cardinal-200 hover:text-cardinal-700"
-                        }`}>
-                        All Races
-                        <span className={`ml-2 rounded-full px-1.5 py-0.5 text-xs ${selectedRace === "All" ? "bg-cardinal-700 text-cardinal-100" : "bg-gray-100 text-gray-400"}`}>
-                            {allResultsCount}
-                        </span>
-                    </button>
-                )}
                 {uniqueRaces.map((race) => {
-                    const count    = allResultsCount; // Simplified - would need to compute per race
                     const isActive = selectedRace === race.name;
                     return (
                         <button key={race.name} onClick={() => onSelectRace(race.name)}

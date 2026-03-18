@@ -4,5 +4,11 @@
             "dev": false,
             "main": true
         }
-    }
+    },
+    "crons": [
+        {
+            "path": "/api/keep-alive",
+            "schedule": "0 12 * * *"
+        }
+    ]
 }

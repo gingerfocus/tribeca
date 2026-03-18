@@ -27,6 +27,17 @@ function StatCard({ label, value, sub, accent }: {
     );
 }
 
+// ─── Section Heading ──────────────────────────────────────────────────────────
+
+function SectionHeading({ title, sub }: { title: string; sub?: string }) {
+    return (
+        <div className="mb-3 flex items-baseline gap-3">
+            <h2 className="text-base font-semibold text-gray-800">{title}</h2>
+            {sub && <p className="text-xs text-gray-400">{sub}</p>}
+        </div>
+    );
+}
+
 // ─── Dashboard Page ───────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -239,7 +250,10 @@ export default function Dashboard() {
                     </div>
                     <Link
                         href="/races"
-                        className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 shadow-sm transition-all hover:border-cardinal-300 hover:text-cardinal-700">
+                        className="flex items-center gap-2 rounded-lg bg-cardinal-800 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-cardinal-700 active:scale-95">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
                         Race Results
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -305,22 +319,40 @@ export default function Dashboard() {
 
                 {/* ── Stats Bar ── */}
                 {stats && (
-                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                        <StatCard label="Total Finishers"      value={stats.total.toString()} />
-                        <StatCard label="Santa Clara Athletes" value={stats.scCount.toString()}
-                            sub={stats.scLabel} accent />
-                        <StatCard label="Fastest Time"  value={formatTime(stats.fastest)} />
-                        <StatCard label="Median Time"   value={formatTime(stats.medianMs)} />
+                    <div>
+                        <SectionHeading
+                            title="Race Overview"
+                            sub={selectedRace === "All" ? "Across all races" : `Stats for ${selectedRace}`}
+                        />
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                            <StatCard label="Total Finishers"      value={stats.total.toString()} />
+                            <StatCard label="Santa Clara Athletes" value={stats.scCount.toString()}
+                                sub={stats.scLabel} accent />
+                            <StatCard label="Fastest Time"  value={formatTime(stats.fastest)} />
+                            <StatCard label="Median Time"   value={formatTime(stats.medianMs)} />
+                        </div>
                     </div>
                 )}
 
                 {/* ── SCU Summary ── */}
-                {raceResults.length > 0 && <ScuSummary raceResults={raceResults} />}
+                {raceResults.length > 0 && (
+                    <div>
+                        <SectionHeading
+                            title="SCU Performance"
+                            sub="How Santa Clara athletes compare to the full field"
+                        />
+                        <ScuSummary raceResults={raceResults} />
+                    </div>
+                )}
 
                 {/* ── Gender Comparison ── */}
                 {genderComparison && (genderComparison.men || genderComparison.women) && (
-                    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                        <h2 className="mb-4 text-sm font-semibold text-gray-700">SCU Men vs. Women</h2>
+                    <div>
+                        <SectionHeading
+                            title="Men vs. Women"
+                            sub="Gender-specific finishing rank among SCU athletes"
+                        />
+                        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             {[
                                 { label: "Men",   gKey: "M" as const, data: genderComparison.men,   color: "text-blue-600",  bg: "bg-blue-50",  border: "border-blue-100" },
@@ -390,12 +422,17 @@ export default function Dashboard() {
                                 );
                             })}
                         </div>
+                        </div>
                     </div>
                 )}
 
                 {/* ── Individual Athlete Performance ── */}
+                <div>
+                    <SectionHeading
+                        title="Individual Performance"
+                        sub="Search any athlete to compare their splits against the field median"
+                    />
                 <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                    <h2 className="mb-4 text-sm font-semibold text-gray-700">Individual Performance</h2>
 
                     {/* Athlete search */}
                     <div className="relative mb-5 max-w-sm">
@@ -451,6 +488,7 @@ export default function Dashboard() {
                             <p className="text-sm text-gray-400">Search for an athlete above to view their splits</p>
                         </div>
                     )}
+                </div>
                 </div>
 
             </div>
